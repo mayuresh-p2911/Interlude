@@ -44,7 +44,7 @@ export class UsersService {
       bio: user.bio,
       onlineStatus: showOnlineStatus ? user.onlineStatus : 'offline',
       currentActivity: showActivity ? user.currentActivity : null,
-      joinedAt: user.createdAt,
+      joinedAt: (user as any).createdAt,
     };
 
     return publicProfile;

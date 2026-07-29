@@ -7,6 +7,7 @@ import { Watchlist, WatchlistDocument } from '../schemas/watchlist.schema';
 import { ContinueWatching, ContinueWatchingDocument } from '../schemas/continue-watching.schema';
 import { WatchHistory, WatchHistoryDocument } from '../schemas/watch-history.schema';
 import { ProviderFactory } from './providers/provider.factory';
+import { StreamingProviderMovie } from './providers/streaming-provider.interface';
 
 @Injectable()
 export class MoviesService {
@@ -33,7 +34,7 @@ export class MoviesService {
       .limit(limit)
       .lean();
 
-    const merged = this.mergeResults(results.map((r) => ({ ...r, _id: r.providerId })), local);
+    const merged = this.mergeResults((results as any[]).map((r) => ({ ...r, _id: r.providerId })), local as any[]);
     return { data: merged.slice(0, limit), total: merged.length, page, limit };
   }
 
@@ -146,11 +147,11 @@ export class MoviesService {
   }
 
   // ── Cache Helpers ─────────────────────────────────────────
-  private async cacheMovies(movies: Awaited<ReturnType<typeof this.providerFactory.getProvider>['searchMovies']>) {
+  private async cacheMovies(movies: StreamingProviderMovie[]) {
     await Promise.allSettled(movies.map((m) => this.upsertMovie(m)));
   }
 
-  private async upsertMovie(movie: ReturnType<typeof this.providerFactory.getProvider>['searchMovies'] extends Promise<infer T> ? T[number] : never) {
+  private async upsertMovie(movie: StreamingProviderMovie) {
     const doc = await this.movieModel.findOneAndUpdate(
       { providerId: movie.providerId, provider: movie.provider },
       {

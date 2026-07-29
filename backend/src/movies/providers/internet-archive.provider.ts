@@ -138,7 +138,7 @@ export class InternetArchiveProvider extends StreamingProvider {
         language: this.firstOf(metadata.language),
         rating: metadata.avg_rating ? parseFloat(String(metadata.avg_rating)) : undefined,
         cast: this.toArray(metadata.creator),
-        streamUrl,
+        streamUrl: streamUrl ?? undefined,
         subtitleTracks,
         audioTracks,
       };

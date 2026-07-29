@@ -116,6 +116,6 @@ export class UsersController {
   @ApiOperation({ summary: 'Get user friend list' })
   async getUserFriends(@Param('username') username: string) {
     const user = await this.usersService.findByUsername(username);
-    return this.usersService.getUserFriends((user as { _id: string })._id.toString());
+    return this.usersService.getUserFriends(String((user as any)._id));
   }
 }
