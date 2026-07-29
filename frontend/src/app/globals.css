@@ -1,0 +1,241 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables ──────────────────────────────────────────── */
+:root {
+  --color-bg: #000000;
+  --color-bg-2: #0A0A0A;
+  --color-bg-3: #111827;
+  --color-navy: #081B33;
+  --color-blue: #2563EB;
+  --color-electric: #3B82F6;
+  --color-ice: #60A5FA;
+  --color-text: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted: #6B7280;
+  --scrollbar-width: 6px;
+  --font-inter: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Base Reset ─────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: var(--font-inter);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-inter);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ── Custom Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1F2937;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+/* ── Selection ──────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(37, 99, 235, 0.4);
+  color: #fff;
+}
+
+/* ── Utility Layer ──────────────────────────────────────────── */
+@layer utilities {
+  /* Neomorphic card */
+  .neo-card {
+    background: #0D1117;
+    box-shadow: 8px 8px 16px #050505, -4px -4px 12px #1a1a2e;
+    border-radius: 1.25rem;
+  }
+
+  .neo-card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .neo-card-hover:hover {
+    box-shadow: 0 8px 40px rgba(37, 99, 235, 0.25), 8px 8px 16px #050505, -4px -4px 12px #1a1a2e;
+    transform: translateY(-4px);
+  }
+
+  /* Glassmorphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-navy {
+    background: rgba(8, 27, 51, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #1F2937 0%,
+      #374151 50%,
+      #1F2937 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+    border-radius: 0.5rem;
+  }
+
+  /* Blue glow button */
+  .btn-primary {
+    background: linear-gradient(135deg, #2563EB, #3B82F6);
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.75rem;
+    border-radius: 0.75rem;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(37, 99, 235, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    background: transparent;
+    color: #9CA3AF;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.25s ease;
+    cursor: pointer;
+  }
+
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #F9FAFB;
+    border-color: rgba(37, 99, 235, 0.3);
+  }
+
+  /* Input field */
+  .input-field {
+    background: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+    color: #F9FAFB;
+    padding: 0.875rem 1.125rem;
+    width: 100%;
+    font-size: 0.9375rem;
+    transition: all 0.2s ease;
+    box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.3);
+    outline: none;
+  }
+
+  .input-field:focus {
+    border-color: #3B82F6;
+    box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  .input-field::placeholder {
+    color: #4B5563;
+  }
+
+  /* Cinematic text gradient */
+  .text-gradient-blue {
+    background: linear-gradient(135deg, #3B82F6, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Scrollable horizontal row */
+  .scroll-row {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Cinema ratio */
+  .aspect-movie {
+    aspect-ratio: 2 / 3;
+  }
+
+  .aspect-backdrop {
+    aspect-ratio: 16 / 9;
+  }
+
+  /* Blue dot indicator */
+  .online-dot::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: #10B981;
+    border: 2px solid #0A0A0A;
+    border-radius: 50%;
+  }
+}
+
+/* ── Video Player Overrides ─────────────────────────────────── */
+video::-webkit-media-controls {
+  display: none !important;
+}
+
+video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+/* ── Page Transitions ───────────────────────────────────────── */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
