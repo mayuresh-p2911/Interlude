@@ -159,5 +159,6 @@ export function useVoiceChat(roomId: string) {
     };
   }, []);
 
-  return { joinVoice, leaveVoice, toggleMute, ...voice };
+  return { ...voice, joinVoice, leaveVoice, toggleMute };
 }
+
