@@ -34,10 +34,10 @@ export class WatchSession {
   @Prop({ default: 1 })
   playbackRate: number;
 
-  @Prop({ default: null })
+  @Prop({ type: Date, default: null })
   startedAt: Date | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Date, default: null })
   endedAt: Date | null;
 
   @Prop({ default: false })

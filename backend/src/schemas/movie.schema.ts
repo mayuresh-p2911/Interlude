@@ -36,34 +36,34 @@ export class Movie {
   @Prop({ default: '' })
   description: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   poster: string | null;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   backdrop: string | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   year: number | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   runtime: number | null;
 
   @Prop({ type: [String], default: [] })
   genres: string[];
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   language: string | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   rating: number | null;
 
   @Prop({ type: [String], default: [] })
   cast: string[];
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   director: string | null;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   streamUrl: string | null;
 
   @Prop({ type: [Object], default: [] })

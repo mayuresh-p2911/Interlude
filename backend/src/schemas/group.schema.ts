@@ -25,7 +25,7 @@ export class Group {
   @Prop({ required: true, trim: true, minlength: 2, maxlength: 50 })
   name: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   picture: string | null;
 
   @Prop({ default: '', maxlength: 300 })

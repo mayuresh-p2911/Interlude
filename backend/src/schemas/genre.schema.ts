@@ -11,7 +11,7 @@ export class Genre {
   @Prop({ required: true, unique: true })
   slug: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   icon: string | null;
 }
 

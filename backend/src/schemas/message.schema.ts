@@ -26,7 +26,7 @@ export class Message {
   @Prop({ enum: ['text', 'image', 'movie_share', 'system'], default: 'text' })
   type: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   imageUrl: string | null;
 
   @Prop({ type: Object, default: null })

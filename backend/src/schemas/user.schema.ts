@@ -14,7 +14,7 @@ export class User {
   @Prop({ required: true, select: false })
   password: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   avatar: string | null;
 
   @Prop({ default: '', maxlength: 200 })
@@ -40,22 +40,22 @@ export class User {
     sessionId?: string;
   } | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   refreshToken: string | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   emailVerificationToken: string | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: Date, default: null, select: false })
   emailVerificationExpiry: Date | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   passwordResetToken: string | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: Date, default: null, select: false })
   passwordResetExpiry: Date | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Date, default: null })
   lastSeen: Date | null;
 }
 
