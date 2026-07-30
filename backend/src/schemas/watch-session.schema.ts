@@ -3,6 +3,7 @@ import { Document, Types } from 'mongoose';
 
 export type WatchSessionDocument = WatchSession & Document;
 
+@Schema({ _id: false })
 class SessionParticipant {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;

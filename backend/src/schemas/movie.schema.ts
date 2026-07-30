@@ -3,6 +3,7 @@ import { Document } from 'mongoose';
 
 export type MovieDocument = Movie & Document;
 
+@Schema({ _id: false })
 class SubtitleTrack {
   @Prop({ required: true })
   label: string;
@@ -14,6 +15,7 @@ class SubtitleTrack {
   url: string;
 }
 
+@Schema({ _id: false })
 class AudioTrack {
   @Prop({ required: true })
   label: string;

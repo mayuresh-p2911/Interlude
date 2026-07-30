@@ -3,6 +3,7 @@ import { Document, Types } from 'mongoose';
 
 export type GroupDocument = Group & Document;
 
+@Schema({ _id: false })
 class QueueItem {
   @Prop({ required: true })
   movieId: string;

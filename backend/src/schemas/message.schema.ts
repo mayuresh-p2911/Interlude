@@ -17,7 +17,7 @@ export class Message {
   group: Types.ObjectId | null;
 
   // Conversation ID (sender+recipient sorted and joined)
-  @Prop({ default: null, index: true })
+  @Prop({ type: String, default: null, index: true })
   conversationId: string | null;
 
   @Prop({ required: true, maxlength: 4000 })
