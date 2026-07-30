@@ -29,7 +29,7 @@ import { GatewaysModule } from './gateways/gateways.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
-        dbName: 'interlude',
+        authSource: 'admin',
       }),
       inject: [ConfigService],
     }),
