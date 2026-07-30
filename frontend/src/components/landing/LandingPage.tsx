@@ -75,32 +75,32 @@ export default function LandingPage() {
     <div className="min-h-screen bg-black-midnight overflow-hidden">
       {/* ── Navigation ───────────────────────────────────────── */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex items-center gap-3"
+            className="flex items-center gap-2 sm:gap-3 shrink-0"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-royal to-blue-electric rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-royal to-blue-electric rounded-lg flex items-center justify-center shrink-0">
               <FilmIcon className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-widest text-white">INTERLUDE</span>
+            <span className="text-base sm:text-xl font-bold tracking-widest text-white whitespace-nowrap">INTERLUDE</span>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex items-center gap-4"
+            className="flex items-center gap-2.5 sm:gap-4 shrink-0"
           >
             <Link
               href="/auth/login"
-              className="text-text-secondary hover:text-white transition-colors duration-200 text-sm font-medium"
+              className="text-text-secondary hover:text-white transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
             >
               Sign In
             </Link>
-            <Link href="/auth/register" className="btn-primary text-sm py-2.5 px-5">
+            <Link href="/auth/register" className="btn-primary text-xs sm:text-sm py-2 px-3.5 sm:py-2.5 sm:px-5 whitespace-nowrap shrink-0">
               Get Started
             </Link>
           </motion.div>

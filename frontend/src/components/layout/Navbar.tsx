@@ -49,13 +49,13 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-white/5">
-      <div className="h-full px-6 flex items-center gap-4">
+      <div className="h-full px-4 sm:px-6 flex items-center gap-2 sm:gap-4">
         {/* Logo */}
-        <Link href="/home" className="flex items-center gap-2 mr-4">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-royal to-blue-electric rounded-lg flex items-center justify-center">
+        <Link href="/home" className="flex items-center gap-2 mr-2 sm:mr-4 shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-royal to-blue-electric rounded-lg flex items-center justify-center shrink-0">
             <FilmIcon className="w-4 h-4 text-white" />
           </div>
-          <span className="text-lg font-black tracking-widest text-white hidden sm:block">
+          <span className="text-lg font-black tracking-widest text-white hidden sm:block whitespace-nowrap">
             INTERLUDE
           </span>
         </Link>
