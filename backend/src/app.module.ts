@@ -29,7 +29,6 @@ import { GatewaysModule } from './gateways/gateways.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
-        authSource: 'admin',
       }),
       inject: [ConfigService],
     }),
