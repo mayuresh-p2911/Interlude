@@ -13,12 +13,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isConnected } = useSocket();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('access_token');
+    if (!isAuthenticated && !hasToken) {
       router.replace('/auth/login');
       return;
     }
     fetchMe().catch(() => {
-      router.replace('/auth/login');
+      if (typeof window !== 'undefined' && !localStorage.getItem('access_token')) {
+        router.replace('/auth/login');
+      }
     });
   }, [isAuthenticated, fetchMe, router]);
 

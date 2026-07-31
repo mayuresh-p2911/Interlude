@@ -44,10 +44,20 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as typeof error.config & { _retry?: boolean };
 
-    // Do NOT attempt token refresh for auth endpoints (login, register, refresh, etc.)
-    const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
+    // Only exclude specific non-authenticated auth endpoints from token refresh
+    const NON_REFRESHABLE_ENDPOINTS = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/refresh',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/verify-email',
+    ];
+    const isNonRefreshable = NON_REFRESHABLE_ENDPOINTS.some((ep) =>
+      originalRequest?.url?.includes(ep),
+    );
 
-    if (error.response?.status === 401 && !originalRequest?._retry && !isAuthEndpoint) {
+    if (error.response?.status === 401 && !originalRequest?._retry && !isNonRefreshable) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           refreshSubscribers.push({

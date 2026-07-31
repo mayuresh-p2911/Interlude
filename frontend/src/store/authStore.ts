@@ -94,7 +94,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'interlude-auth',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
     },
   ),
 );
