@@ -24,10 +24,18 @@ api.interceptors.request.use((config) => {
 
 // ── Response Interceptor — Handle 401 and refresh ────────────
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<{
+  resolve: (token: string) => void;
+  reject: (err: unknown) => void;
+}> = [];
 
 function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers.forEach((sub) => sub.resolve(token));
+  refreshSubscribers = [];
+}
+
+function onTokenRefreshFailed(err: unknown) {
+  refreshSubscribers.forEach((sub) => sub.reject(err));
   refreshSubscribers = [];
 }
 
@@ -36,14 +44,20 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as typeof error.config & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Do NOT attempt token refresh for auth endpoints (login, register, refresh, etc.)
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
+
+    if (error.response?.status === 401 && !originalRequest?._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          refreshSubscribers.push((token: string) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            resolve(api(originalRequest));
+        return new Promise((resolve, reject) => {
+          refreshSubscribers.push({
+            resolve: (token: string) => {
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+              }
+              resolve(api(originalRequest));
+            },
+            reject: (err: unknown) => reject(err),
           });
         });
       }
@@ -62,10 +76,11 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         }
         return api(originalRequest);
-      } catch {
+      } catch (refreshErr) {
         isRefreshing = false;
+        onTokenRefreshFailed(refreshErr);
         localStorage.removeItem('access_token');
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/')) {
           window.location.href = '/auth/login';
         }
       }

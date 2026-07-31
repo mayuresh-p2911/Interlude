@@ -17,11 +17,6 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Pre-warm backend connection on page load (eliminates Render cold start delays)
-  useEffect(() => {
-    authApi.me().catch(() => {});
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
