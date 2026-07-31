@@ -43,8 +43,15 @@ export default function FriendsPage() {
     onSuccess: () => {
       toast.success('Friend request sent!');
       queryClient.invalidateQueries({ queryKey: ['friend-suggestions'] });
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['user-search'] });
     },
-    onError: () => toast.error('Failed to send request'),
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to send request';
+      toast.error(msg);
+    },
   });
 
   const acceptMutation = useMutation({

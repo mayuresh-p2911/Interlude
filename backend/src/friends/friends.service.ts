@@ -31,35 +31,50 @@ export class FriendsService {
     const receiver = await this.userModel.findById(receiverId);
     if (!receiver) throw new NotFoundException('User not found');
 
+    const senderObjId = new Types.ObjectId(senderId);
+    const receiverObjId = new Types.ObjectId(receiverId);
+
     // Check if blocked
     const isBlocked = await this.blockModel.findOne({
       $or: [
-        { blocker: senderId, blocked: receiverId },
-        { blocker: receiverId, blocked: senderId },
+        { blocker: senderObjId, blocked: receiverObjId },
+        { blocker: receiverObjId, blocked: senderObjId },
       ],
     });
     if (isBlocked) throw new ForbiddenException('Cannot send friend request');
 
     // Check existing friendship
     const alreadyFriends = await this.friendshipModel.findOne({
-      user: new Types.ObjectId(senderId),
-      friend: new Types.ObjectId(receiverId),
+      user: senderObjId,
+      friend: receiverObjId,
     });
     if (alreadyFriends) throw new ConflictException('Already friends');
 
-    // Check existing pending request
+    // Check existing request in any direction
     const existingRequest = await this.friendRequestModel.findOne({
       $or: [
-        { sender: senderId, receiver: receiverId, status: 'pending' },
-        { sender: receiverId, receiver: senderId, status: 'pending' },
+        { sender: senderObjId, receiver: receiverObjId },
+        { sender: receiverObjId, receiver: senderObjId },
       ],
     });
-    if (existingRequest) throw new ConflictException('Friend request already pending');
 
-    const request = await this.friendRequestModel.create({
-      sender: new Types.ObjectId(senderId),
-      receiver: new Types.ObjectId(receiverId),
-    });
+    let request;
+    if (existingRequest) {
+      if (existingRequest.status === 'pending') {
+        throw new ConflictException('Friend request already pending');
+      }
+      // Re-activate previously declined or cancelled request
+      existingRequest.sender = senderObjId;
+      existingRequest.receiver = receiverObjId;
+      existingRequest.status = 'pending';
+      request = await existingRequest.save();
+    } else {
+      request = await this.friendRequestModel.create({
+        sender: senderObjId,
+        receiver: receiverObjId,
+        status: 'pending',
+      });
+    }
 
     const sender = await this.userModel.findById(senderId);
 
@@ -204,7 +219,15 @@ export class FriendsService {
       .lean();
     const blockedIds = blockedUsers.flatMap((b) => [b.blocker.toString(), b.blocked.toString()]);
 
-    const excludedIds = [...new Set([userId, ...friendIds, ...blockedIds])].map(
+    const pendingRequests = await this.friendRequestModel
+      .find({
+        $or: [{ sender: new Types.ObjectId(userId) }, { receiver: new Types.ObjectId(userId) }],
+        status: 'pending',
+      })
+      .lean();
+    const pendingIds = pendingRequests.flatMap((p) => [p.sender.toString(), p.receiver.toString()]);
+
+    const excludedIds = [...new Set([userId, ...friendIds, ...blockedIds, ...pendingIds])].map(
       (id) => new Types.ObjectId(id),
     );
 
