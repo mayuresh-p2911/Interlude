@@ -7,6 +7,7 @@ import { Movie, MovieSchema } from '../schemas/movie.schema';
 import { Friendship, FriendshipSchema } from '../schemas/friendship.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MoviesModule } from '../movies/movies.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: User.name, schema: UserSchema },
     ]),
     NotificationsModule,
+    MoviesModule,
   ],
   controllers: [WatchSessionsController],
   providers: [WatchSessionsService],

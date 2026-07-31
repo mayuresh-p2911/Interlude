@@ -35,13 +35,20 @@ export default function MovieDetailPage({ movieId }: { movieId: string }) {
       const session = res.data as { _id: string };
 
       if (selectedFriends.length > 0) {
-        await sessionsApi.invite(session._id, selectedFriends);
+        try {
+          await sessionsApi.invite(session._id, selectedFriends);
+        } catch {
+          toast.error('Session created, but invitations could not be sent.');
+        }
       }
 
       toast.success('Watch session created!');
       router.push(`/watch/${session._id}`);
-    } catch {
-      toast.error('Failed to create watch session');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to create watch session';
+      toast.error(message);
     } finally {
       setCreatingSession(false);
     }

@@ -12,6 +12,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Friendship, FriendshipDocument } from '../schemas/friendship.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 
+import { MoviesService } from '../movies/movies.service';
+
 @Injectable()
 export class WatchSessionsService {
   constructor(
@@ -20,15 +22,26 @@ export class WatchSessionsService {
     @InjectModel(Friendship.name) private friendshipModel: Model<FriendshipDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private notificationsService: NotificationsService,
+    private moviesService: MoviesService,
   ) {}
 
   async createSession(hostId: string, movieId: string, isPrivate = true, groupId?: string) {
-    const movie = await this.movieModel.findById(movieId);
+    let movie: MovieDocument | null = null;
+    if (Types.ObjectId.isValid(movieId)) {
+      movie = await this.movieModel.findById(movieId);
+    }
+    if (!movie) {
+      movie = await this.movieModel.findOne({ providerId: movieId });
+    }
+    if (!movie) {
+      movie = (await this.moviesService.getMovieById(movieId).catch(() => null)) as MovieDocument | null;
+    }
+
     if (!movie) throw new NotFoundException('Movie not found');
 
     const session = await this.sessionModel.create({
       host: new Types.ObjectId(hostId),
-      movie: new Types.ObjectId(movieId),
+      movie: movie._id,
       participants: [{ user: new Types.ObjectId(hostId), joinedAt: new Date(), isActive: true }],
       state: 'waiting',
       currentTime: 0,
@@ -142,17 +155,21 @@ export class WatchSessionsService {
     if (!session) throw new NotFoundException('Session not found');
 
     const inviter = await this.userModel.findById(userId);
-    const movie = session.movie as unknown as { title: string };
+    const movie = session.movie as unknown as { title?: string };
+
+    const validFriendIds = (friendIds || []).filter((id) => Types.ObjectId.isValid(id));
 
     await Promise.all(
-      friendIds.map((friendId) =>
-        this.notificationsService.create({
-          recipient: friendId,
-          type: 'watch_invite',
-          title: 'Watch Party Invitation',
-          body: `${inviter?.username ?? 'Someone'} invited you to watch ${movie.title}`,
-          data: { sessionId },
-        }),
+      validFriendIds.map((friendId) =>
+        this.notificationsService
+          .create({
+            recipient: friendId,
+            type: 'watch_invite',
+            title: 'Watch Party Invitation',
+            body: `${inviter?.username ?? 'Someone'} invited you to watch ${movie?.title ?? 'a movie'}`,
+            data: { sessionId },
+          })
+          .catch((err: unknown) => console.error(`Failed to send invite notification to ${friendId}:`, err)),
       ),
     );
 
