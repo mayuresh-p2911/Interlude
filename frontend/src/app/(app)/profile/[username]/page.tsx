@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { usersApi } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usersApi, friendsApi } from '@/lib/api';
+import toast from 'react-hot-toast';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
@@ -12,7 +13,117 @@ import {
   FilmIcon,
   SparklesIcon,
   CalendarIcon,
+  UserPlusIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline';
+
+function ProfileFriendButton({ targetUserId }: { targetUserId: string }) {
+  const queryClient = useQueryClient();
+
+  const { data: friendsData } = useQuery({
+    queryKey: ['friends'],
+    queryFn: () => friendsApi.getFriends(),
+  });
+
+  const { data: requestsData } = useQuery({
+    queryKey: ['friend-requests'],
+    queryFn: () => friendsApi.getRequests(),
+  });
+
+  const { data: sentRequestsData } = useQuery({
+    queryKey: ['sent-friend-requests'],
+    queryFn: () => friendsApi.getSentRequests(),
+  });
+
+  const friends = (friendsData?.data as Record<string, unknown>[]) ?? [];
+  const requests = (requestsData?.data as Record<string, unknown>[]) ?? [];
+  const sentRequests = (sentRequestsData?.data as Record<string, unknown>[]) ?? [];
+
+  const friendIds = new Set(friends.map((f) => String(f._id)));
+
+  const incomingMap = new Map<string, string>();
+  requests.forEach((r) => {
+    const senderObj = r.sender as Record<string, unknown>;
+    if (senderObj && senderObj._id) {
+      incomingMap.set(String(senderObj._id), String(r._id));
+    }
+  });
+
+  const sentSet = new Set<string>();
+  sentRequests.forEach((sr) => {
+    const receiverObj = sr.receiver as Record<string, unknown>;
+    if (receiverObj && receiverObj._id) {
+      sentSet.add(String(receiverObj._id));
+    }
+  });
+
+  const sendRequestMutation = useMutation({
+    mutationFn: (userId: string) => friendsApi.sendRequest(userId),
+    onSuccess: () => {
+      toast.success('Friend request sent!');
+      queryClient.invalidateQueries({ queryKey: ['sent-friend-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['friend-suggestions'] });
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['friends'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to send request';
+      toast.error(msg);
+    },
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: (requestId: string) => friendsApi.acceptRequest(requestId),
+    onSuccess: () => {
+      toast.success('Friend request accepted');
+      queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['sent-friend-requests'] });
+    },
+  });
+
+  if (!targetUserId) return null;
+
+  if (friendIds.has(targetUserId)) {
+    return (
+      <span className="px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold flex items-center gap-1.5 shrink-0 self-center md:self-start">
+        <CheckIcon className="w-4 h-4" /> Added
+      </span>
+    );
+  }
+
+  if (sentSet.has(targetUserId)) {
+    return (
+      <span className="px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold flex items-center gap-1.5 shrink-0 self-center md:self-start">
+        <ClockIcon className="w-4 h-4" /> Pending
+      </span>
+    );
+  }
+
+  if (incomingMap.has(targetUserId)) {
+    const requestId = incomingMap.get(targetUserId)!;
+    return (
+      <button
+        onClick={() => acceptMutation.mutate(requestId)}
+        className="btn-primary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 self-center md:self-start"
+      >
+        <CheckIcon className="w-4 h-4" /> Accept Request
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => sendRequestMutation.mutate(targetUserId)}
+      disabled={sendRequestMutation.isPending}
+      className="btn-primary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 self-center md:self-start"
+    >
+      <UserPlusIcon className="w-4 h-4" /> Add Friend
+    </button>
+  );
+}
 
 export default function ProfilePage({ params }: { params: { username: string } }) {
   const { user: currentUser } = useAuthStore();
@@ -93,14 +204,16 @@ export default function ProfilePage({ params }: { params: { username: string } }
           </div>
         </div>
 
-        {/* Edit Profile Button (Visible on Own Profile) */}
-        {isOwnProfile && (
+        {/* Action Button: Edit Profile (Own Profile) or Add Friend / Pending / Added (Other User Profile) */}
+        {isOwnProfile ? (
           <Link
             href="/settings"
             className="btn-secondary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 self-center md:self-start"
           >
             <Cog6ToothIcon className="w-4 h-4" /> Edit Profile
           </Link>
+        ) : (
+          <ProfileFriendButton targetUserId={String(profile._id ?? '')} />
         )}
       </div>
 
