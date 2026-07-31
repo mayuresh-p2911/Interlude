@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsEmail, IsString, IsNumber, Min, Max, MinLength, MaxLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -14,6 +14,12 @@ export class RegisterDto {
   @ApiProperty({ example: 'john@example.com' })
   @IsEmail()
   email: string;
+
+  @ApiProperty({ example: 21 })
+  @IsNumber()
+  @Min(18, { message: 'You must be at least 18 years old to register' })
+  @Max(120, { message: 'Please enter a valid age' })
+  age: number;
 
   @ApiProperty({ example: 'SecurePass123!' })
   @IsString()

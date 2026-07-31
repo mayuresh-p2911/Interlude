@@ -14,11 +14,23 @@ export class User {
   @Prop({ required: true, select: false })
   password: string;
 
+  @Prop({ type: Number, required: true, min: 18, max: 120 })
+  age: number;
+
+  @Prop({ type: String, default: '', maxlength: 30 })
+  pronouns: string;
+
   @Prop({ type: String, default: null })
   avatar: string | null;
 
   @Prop({ default: '', maxlength: 200 })
   bio: string;
+
+  @Prop({ type: Object, default: null })
+  customStatus: {
+    text: string;
+    expiresAt: Date;
+  } | null;
 
   @Prop({ default: false })
   isAdmin: boolean;

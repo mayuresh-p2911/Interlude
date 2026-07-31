@@ -17,4 +17,16 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(200)
   bio?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  pronouns?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  customStatusText?: string;
 }

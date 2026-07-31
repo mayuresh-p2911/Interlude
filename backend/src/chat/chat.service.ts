@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, MessageDocument } from '../schemas/message.schema';
+import { Settings, SettingsDocument } from '../schemas/settings.schema';
+import { Friendship, FriendshipDocument } from '../schemas/friendship.schema';
 import { UploadService } from '../common/upload.service';
 import * as sanitizeHtml from 'sanitize-html';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +12,8 @@ import { v4 as uuidv4 } from 'uuid';
 export class ChatService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
+    @InjectModel(Settings.name) private settingsModel: Model<SettingsDocument>,
+    @InjectModel(Friendship.name) private friendshipModel: Model<FriendshipDocument>,
     private uploadService: UploadService,
   ) {}
 
@@ -83,14 +87,51 @@ export class ChatService {
     type: 'text' | 'image' | 'movie_share' = 'text',
     extra?: { imageUrl?: string; movieRef?: { movieId: string; title: string; poster?: string } },
   ) {
+    // Check recipient settings
+    const recipientSettings = await this.settingsModel.findOne({
+      userId: new Types.ObjectId(recipientId),
+    });
+
+    const isFriend = await this.friendshipModel.exists({
+      user: new Types.ObjectId(senderId),
+      friend: new Types.ObjectId(recipientId),
+    });
+
+    const allowDmsFrom = recipientSettings?.messaging?.allowDmsFrom ?? 'all';
+    if (allowDmsFrom === 'none') {
+      throw new ForbiddenException('Recipient does not accept direct messages');
+    }
+    if ((allowDmsFrom === 'friends_only' || allowDmsFrom === 'friends_user_added') && !isFriend) {
+      throw new ForbiddenException('Recipient only accepts direct messages from friends');
+    }
+
+    let processedContent = type === 'text' ? this.sanitizeContent(content) : content;
+
+    // Filter blocked words if specified by recipient
+    const blockedWords = recipientSettings?.messaging?.blockedWords ?? [];
+    if (blockedWords.length > 0 && typeof processedContent === 'string') {
+      blockedWords.forEach((word) => {
+        if (word) {
+          const regex = new RegExp(word, 'gi');
+          processedContent = processedContent.replace(regex, '*'.repeat(word.length));
+        }
+      });
+    }
+
+    // Filter links from non-friends if disabled
+    const allowLinks = recipientSettings?.messaging?.allowLinksFromNonFriends ?? true;
+    if (!allowLinks && !isFriend && typeof processedContent === 'string') {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      processedContent = processedContent.replace(urlRegex, '[Link Disabled]');
+    }
+
     const conversationId = this.buildConversationId(senderId, recipientId);
-    const sanitized = type === 'text' ? this.sanitizeContent(content) : content;
 
     const message = await this.messageModel.create({
       sender: new Types.ObjectId(senderId),
       recipient: new Types.ObjectId(recipientId),
       conversationId,
-      content: sanitized,
+      content: processedContent,
       type,
       imageUrl: extra?.imageUrl ?? null,
       movieRef: extra?.movieRef ?? null,

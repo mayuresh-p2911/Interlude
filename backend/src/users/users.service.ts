@@ -31,19 +31,46 @@ export class UsersService {
     const user = await this.userModel.findOne({ username, isBlocked: false });
     if (!user) throw new NotFoundException('User not found');
 
-    const settings = await this.settingsModel.findOne({ userId: user._id });
+    const targetSettings = await this.settingsModel.findOne({ userId: user._id });
+    let requestingSettings = null;
+    if (requestingUserId) {
+      requestingSettings = await this.settingsModel.findOne({
+        userId: new Types.ObjectId(requestingUserId),
+      });
+    }
 
     // Check privacy settings
-    const showOnlineStatus = settings?.privacy?.showOnlineStatus ?? true;
-    const showActivity = settings?.privacy?.showActivity ?? true;
+    const targetShowLastActive = targetSettings?.privacy?.showLastActive ?? true;
+    const requestingShowLastActive = requestingSettings?.privacy?.showLastActive ?? true;
+    // NOTE: IF USER DISABLES SHOW LAST ACTIVE, HE WON'T SEE ANYONE'S LAST ACTIVE
+    const canSeeLastActive = targetShowLastActive && requestingShowLastActive;
+
+    const showActivity = targetSettings?.privacy?.showActivity ?? true;
+    const showFriendList = targetSettings?.privacy?.showFriendList ?? true;
+
+    // Check if custom status has expired (24 hours)
+    let activeCustomStatus = null;
+    if (user.customStatus && user.customStatus.expiresAt > new Date()) {
+      activeCustomStatus = user.customStatus.text;
+    }
+
+    // Friends count
+    let friendsCount = 0;
+    if (showFriendList) {
+      friendsCount = await this.friendshipModel.countDocuments({ user: user._id });
+    }
 
     const publicProfile = {
       _id: user._id,
       username: user.username,
       avatar: user.avatar,
       bio: user.bio,
-      onlineStatus: showOnlineStatus ? user.onlineStatus : 'offline',
+      pronouns: user.pronouns || '',
+      customStatus: activeCustomStatus,
+      onlineStatus: user.onlineStatus,
+      lastSeen: canSeeLastActive ? user.lastSeen : null,
       currentActivity: showActivity ? user.currentActivity : null,
+      friendsCount: showFriendList ? friendsCount : null,
       joinedAt: (user as any).createdAt,
     };
 
@@ -78,6 +105,21 @@ export class UsersService {
 
     if (dto.bio !== undefined) {
       updateData.bio = dto.bio;
+    }
+
+    if (dto.pronouns !== undefined) {
+      updateData.pronouns = dto.pronouns;
+    }
+
+    if (dto.customStatusText !== undefined) {
+      if (dto.customStatusText.trim() === '') {
+        updateData.customStatus = null;
+      } else {
+        updateData.customStatus = {
+          text: dto.customStatusText.trim(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Lasts 24 hours
+        };
+      }
     }
 
     const updated = await this.userModel.findByIdAndUpdate(userId, updateData, { new: true });

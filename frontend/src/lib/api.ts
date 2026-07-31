@@ -80,7 +80,7 @@ export default api;
 // ── API Helper Functions ──────────────────────────────────────
 
 export const authApi = {
-  register: (data: { username: string; email: string; password: string }) =>
+  register: (data: { username: string; email: string; password: string; age: number }) =>
     api.post('/auth/register', data),
   login: (data: { email: string; password: string; rememberMe?: boolean }) =>
     api.post('/auth/login', data),
@@ -95,7 +95,8 @@ export const authApi = {
 
 export const usersApi = {
   getProfile: (username: string) => api.get(`/users/${username}`),
-  updateProfile: (data: { username?: string; bio?: string }) => api.patch('/users/me', data),
+  updateProfile: (data: { username?: string; bio?: string; pronouns?: string; customStatusText?: string }) =>
+    api.patch('/users/me', data),
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);

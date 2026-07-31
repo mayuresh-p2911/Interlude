@@ -29,15 +29,37 @@ export class Settings {
   @Prop({
     type: Object,
     default: {
-      showOnlineStatus: true,
+      showFriendList: true,
       showActivity: true,
+      showLastActive: true,
       allowFriendRequests: true,
     },
   })
   privacy: {
-    showOnlineStatus: boolean;
+    showFriendList: boolean;
     showActivity: boolean;
+    showLastActive: boolean;
     allowFriendRequests: boolean;
+  };
+
+  @Prop({
+    type: Object,
+    default: {
+      filterMessages: 'none_to_spam',
+      blockedWords: [],
+      readReceipts: true,
+      showEmojiReactions: true,
+      allowLinksFromNonFriends: true,
+      allowDmsFrom: 'all',
+    },
+  })
+  messaging: {
+    filterMessages: 'all_to_spam' | 'non_friends_to_spam' | 'none_to_spam';
+    blockedWords: string[];
+    readReceipts: boolean;
+    showEmojiReactions: boolean;
+    allowLinksFromNonFriends: boolean;
+    allowDmsFrom: 'none' | 'friends_only' | 'friends_user_added' | 'all';
   };
 
   @Prop({

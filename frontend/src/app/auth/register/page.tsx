@@ -19,17 +19,22 @@ export default function RegisterPage() {
   const { register, isLoading } = useAuthStore();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [age, setAge] = useState<number | ''>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof age !== 'number' || age < 18) {
+      toast.error('You must be at least 18 years old to register');
+      return;
+    }
     if (!passwordRequirements.every((r) => r.test(password))) {
       toast.error('Please meet all password requirements');
       return;
     }
     try {
-      await register(username, email, password);
+      await register(username, email, password, Number(age));
       toast.success("Account created! Check your email to verify. 🎬");
       router.push('/home');
     } catch (err: unknown) {
@@ -82,6 +87,24 @@ export default function RegisterPage() {
             required
             autoComplete="email"
           />
+        </div>
+
+        <div>
+          <label htmlFor="register-age" className="block text-sm font-medium text-text-secondary mb-2">
+            Age <span className="text-xs text-blue-ice font-normal">(18+ required)</span>
+          </label>
+          <input
+            id="register-age"
+            type="number"
+            min={18}
+            max={120}
+            className="input-field"
+            placeholder="21"
+            value={age}
+            onChange={(e) => setAge(e.target.value ? parseInt(e.target.value, 10) : '')}
+            required
+          />
+          <p className="mt-1 text-xs text-text-muted">You must be at least 18 years old to join INTERLUDE</p>
         </div>
 
         <div>

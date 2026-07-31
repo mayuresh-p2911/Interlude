@@ -49,6 +49,7 @@ export class AuthService {
     const user = await this.userModel.create({
       username: dto.username,
       email: dto.email.toLowerCase(),
+      age: dto.age,
       password: hashedPassword,
       emailVerificationToken: verificationToken,
       emailVerificationExpiry: verificationExpiry,

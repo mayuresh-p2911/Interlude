@@ -3,8 +3,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { usersApi } from '@/lib/api';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useAuthStore } from '@/store/authStore';
+import {
+  Cog6ToothIcon,
+  UserGroupIcon,
+  ClockIcon,
+  FilmIcon,
+  SparklesIcon,
+  CalendarIcon,
+} from '@heroicons/react/24/outline';
 
 export default function ProfilePage({ params }: { params: { username: string } }) {
+  const { user: currentUser } = useAuthStore();
   const { data, isLoading } = useQuery({
     queryKey: ['profile', params.username],
     queryFn: () => usersApi.getProfile(params.username),
@@ -20,27 +31,110 @@ export default function ProfilePage({ params }: { params: { username: string } }
     );
   }
 
+  const isOwnProfile = currentUser?.username === params.username;
+
   const username = String(profile.username ?? params.username);
+  const pronouns = profile.pronouns ? String(profile.pronouns) : '';
   const bio = String(profile.bio || 'No bio yet.');
   const avatar = String(profile.avatar ?? '');
-  const joinedAt = profile.joinedAt ? new Date(String(profile.joinedAt)).toLocaleDateString() : '';
+  const customStatus = profile.customStatus ? String(profile.customStatus) : null;
+  const friendsCount = profile.friendsCount !== null && profile.friendsCount !== undefined ? Number(profile.friendsCount) : null;
+  const lastSeen = profile.lastSeen ? new Date(String(profile.lastSeen)).toLocaleString() : null;
+  const onlineStatus = String(profile.onlineStatus ?? 'offline');
+  const currentActivity = profile.currentActivity as { type?: string; movieTitle?: string } | null;
+  const joinedAt = profile.joinedAt ? new Date(String(profile.joinedAt)).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-8">
       {/* Header Card */}
-      <div className="neo-card p-8 flex flex-col md:flex-row items-center gap-6">
-        <div className="relative w-24 h-24 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center font-black text-3xl text-white">
-          {avatar ? (
-            <Image src={avatar} alt={username} fill className="object-cover" />
+      <div className="neo-card p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center font-black text-4xl text-white shrink-0 border-2 border-blue-electric/20 shadow-glass">
+            {avatar ? (
+              <Image src={avatar} alt={username} fill className="object-cover" />
+            ) : (
+              username[0]?.toUpperCase()
+            )}
+            {onlineStatus === 'online' && (
+              <span className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-black-midnight" />
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
+              <h1 className="text-2xl sm:text-3xl font-black text-white">{username}</h1>
+              {pronouns && (
+                <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-text-muted text-xs font-semibold">
+                  ({pronouns})
+                </span>
+              )}
+            </div>
+
+            {/* Custom Status */}
+            {customStatus && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-royal/20 border border-blue-electric/30 text-blue-ice text-xs font-medium">
+                <SparklesIcon className="w-3.5 h-3.5" />
+                <span>{customStatus}</span>
+              </div>
+            )}
+
+            <p className="text-text-secondary text-sm max-w-md">{bio}</p>
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-text-muted pt-1">
+              <span className="flex items-center gap-1">
+                <CalendarIcon className="w-4 h-4 text-blue-electric" /> Member since {joinedAt}
+              </span>
+              {lastSeen && (
+                <span className="flex items-center gap-1">
+                  <ClockIcon className="w-4 h-4 text-blue-electric" /> Last active: {lastSeen}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Edit Profile Button (Visible on Own Profile) */}
+        {isOwnProfile && (
+          <Link
+            href="/settings"
+            className="btn-secondary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 self-center md:self-start"
+          >
+            <Cog6ToothIcon className="w-4 h-4" /> Edit Profile
+          </Link>
+        )}
+      </div>
+
+      {/* Info Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Friends Info */}
+        <div className="neo-card p-6 space-y-3">
+          <div className="flex items-center gap-2 text-white font-bold text-base">
+            <UserGroupIcon className="w-5 h-5 text-blue-electric" />
+            <span>Friends</span>
+          </div>
+          {friendsCount !== null ? (
+            <p className="text-2xl font-black text-white">
+              {friendsCount} <span className="text-xs font-normal text-text-muted">Friends</span>
+            </p>
           ) : (
-            username[0]?.toUpperCase()
+            <p className="text-xs text-text-muted italic">Friend list is private</p>
           )}
         </div>
 
-        <div className="text-center md:text-left space-y-2">
-          <h1 className="text-3xl font-black text-white">{username}</h1>
-          <p className="text-text-secondary text-sm max-w-md">{bio}</p>
-          <p className="text-xs text-text-muted">Member since {joinedAt}</p>
+        {/* Recent Activity */}
+        <div className="neo-card p-6 space-y-3">
+          <div className="flex items-center gap-2 text-white font-bold text-base">
+            <FilmIcon className="w-5 h-5 text-blue-electric" />
+            <span>Recent Activity</span>
+          </div>
+          {currentActivity?.movieTitle ? (
+            <div className="flex items-center gap-2 text-sm text-blue-ice">
+              <span className="w-2 h-2 rounded-full bg-blue-electric animate-pulse" />
+              <span>Currently {currentActivity.type === 'watching' ? 'watching' : 'in session'}: <strong>{currentActivity.movieTitle}</strong></span>
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted italic">No recent activity or activity hidden</p>
+          )}
         </div>
       </div>
     </div>
