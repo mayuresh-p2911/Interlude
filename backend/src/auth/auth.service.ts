@@ -11,6 +11,7 @@ import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserDocument } from '../schemas/user.schema';
 import { Settings, SettingsDocument } from '../schemas/settings.schema';
@@ -42,7 +43,7 @@ export class AuthService {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 12);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
     const verificationToken = uuidv4();
     const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -92,10 +93,13 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
-    await this.updateRefreshToken(user._id.toString(), tokens.refreshToken);
+    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
 
-    // Update online status
-    await this.userModel.findByIdAndUpdate(user._id, { onlineStatus: 'online' });
+    // Single atomic update for refresh token and online status
+    await this.userModel.findByIdAndUpdate(user._id, {
+      refreshToken: hashedToken,
+      onlineStatus: 'online',
+    });
 
     return {
       user: this.sanitizeUser(user),
@@ -120,13 +124,21 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    let tokenMatch = false;
+    if (user.refreshToken.startsWith('$2a$') || user.refreshToken.startsWith('$2b$')) {
+      tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    } else {
+      const hashed = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      tokenMatch = hashed === user.refreshToken;
+    }
+
     if (!tokenMatch) {
       throw new UnauthorizedException('Access denied — invalid refresh token');
     }
 
     const tokens = await this.generateTokens(user);
-    await this.updateRefreshToken(userId, tokens.refreshToken);
+    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+    await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
     return tokens;
   }
 
