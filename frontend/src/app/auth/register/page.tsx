@@ -36,7 +36,7 @@ export default function RegisterPage() {
     try {
       await register(username, email, password, Number(age));
       toast.success("Account created! Check your email to verify. 🎬");
-      router.push('/home');
+      window.location.href = '/home';
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??

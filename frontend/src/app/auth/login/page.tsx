@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       await login(email, password, rememberMe);
       toast.success('Welcome back! 🎬');
-      router.push('/home');
+      window.location.href = '/home';
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
