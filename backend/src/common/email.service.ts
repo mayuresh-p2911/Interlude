@@ -30,11 +30,13 @@ export class EmailService {
     this.fromAddress = `INTERLUDE <${user}>`;
 
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: { user, pass },
     });
 
-    this.logger.log(`📧 Email service ready via Gmail SMTP (${user})`);
+    this.logger.log(`📧 Email service ready via Gmail SSL 465 (${user})`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
