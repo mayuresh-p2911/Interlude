@@ -10,8 +10,8 @@ export class EmailService {
   private fromAddress: string;
 
   constructor(private configService: ConfigService) {
-    const user = (this.configService.get<string>('EMAIL_USER') || 'ankricandle@gmail.com').trim();
-    const pass = (this.configService.get<string>('EMAIL_PASS') || 'ggmcykoafwmdgpih').trim().replace(/\s+/g, '');
+    const user = (this.configService.get<string>('EMAIL_USER') || 'interlude209@gmail.com').trim();
+    const pass = (this.configService.get<string>('EMAIL_PASS') || 'rgeqvxysvkgocexc').trim().replace(/\s+/g, '');
 
     this.fromAddress = `INTERLUDE <${user}>`;
 
