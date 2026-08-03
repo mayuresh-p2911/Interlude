@@ -11,7 +11,7 @@ export class EmailService {
 
   constructor(private configService: ConfigService) {
     const user = (this.configService.get<string>('EMAIL_USER') || 'interlude209@gmail.com').trim();
-    const pass = (this.configService.get<string>('EMAIL_PASS') || 'rgeqvxysvkgocexc').trim().replace(/\s+/g, '');
+    const pass = (this.configService.get<string>('EMAIL_PASS') || 'htjftuytlmjczrcm').trim().replace(/\s+/g, '');
 
     this.fromAddress = `INTERLUDE <${user}>`;
 
