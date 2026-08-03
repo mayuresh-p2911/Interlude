@@ -7,46 +7,26 @@ import { Transporter } from 'nodemailer';
 export class EmailService {
   private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
-  private readonly isDev: boolean;
 
   constructor(private configService: ConfigService) {
-    this.isDev = configService.get('NODE_ENV') !== 'production';
+    const user = configService.get<string>('SMTP_USER') || 'interlude209@gmail.com';
+    const pass = configService.get<string>('SMTP_PASSWORD') || 'rgeqvxysvkgocexc';
+    const host = configService.get<string>('SMTP_HOST') || 'smtp.gmail.com';
 
-    const host = configService.get<string>('SMTP_HOST');
-    const user = configService.get<string>('SMTP_USER');
-    const pass = configService.get<string>('SMTP_PASSWORD');
+    this.transporter = nodemailer.createTransport({
+      host: host.includes('gmail') ? 'smtp.gmail.com' : host,
+      port: 465,
+      secure: true,
+      auth: {
+        user: user.trim(),
+        pass: pass.trim().replace(/\s+/g, ''),
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
-    if (!host) {
-      this.transporter = nodemailer.createTransport({
-        jsonTransport: true,
-      });
-      this.logger.log('📧 Email service running in console mode (no SMTP host configured)');
-    } else if (host.includes('gmail')) {
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true, // SSL
-        auth: {
-          user,
-          pass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
-      this.logger.log(`📧 Email service connected to Gmail SSL 465 (${user})`);
-    } else {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: configService.get<number>('SMTP_PORT') ?? 587,
-        secure: false,
-        auth: {
-          user,
-          pass,
-        },
-      });
-      this.logger.log(`📧 Email service connected to SMTP (${host})`);
-    }
+    this.logger.log(`📧 Email service configured for SMTP user: ${user}`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
@@ -54,7 +34,7 @@ export class EmailService {
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
+      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
       to: email,
       subject: 'Verify your INTERLUDE account',
       html: this.buildVerificationEmailHtml(username, verificationUrl),
@@ -68,7 +48,7 @@ export class EmailService {
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
+      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
       to: email,
       subject: 'Reset your INTERLUDE password',
       html: this.buildPasswordResetEmailHtml(username, resetUrl),
@@ -78,17 +58,25 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    if (this.isDev) {
-      this.logger.log(`\n🔑 [DEV MODE 2FA CODE] Email: ${email} | Code: ${code}\n`);
-    }
+    this.logger.log(
+      `\n========================================\n🔑 [2FA OTP CODE] Email: ${email} | Code: ${code}\n========================================\n`,
+    );
+
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
+      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
       to: email,
       subject: `Your INTERLUDE Security Verification Code: ${code}`,
       html: this.buildTwoFactorEmailHtml(username, code),
     };
 
-    await this.sendMail(mailOptions);
+    try {
+      await this.sendMail(mailOptions);
+      this.logger.log(`✅ 2FA Email successfully delivered to ${email}`);
+    } catch (err: unknown) {
+      this.logger.error(
+        `⚠️ SMTP email delivery warning for ${email}: ${(err as Error)?.message || 'Delivery error'}`,
+      );
+    }
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
@@ -96,7 +84,7 @@ export class EmailService {
     const sessionUrl = `${appUrl}/watch/${sessionId}`;
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
+      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
       to: email,
       subject: `${fromUsername} invited you to watch ${movieTitle} on INTERLUDE`,
       html: `
@@ -114,14 +102,12 @@ export class EmailService {
   private async sendMail(options: nodemailer.SendMailOptions) {
     try {
       const info = await this.transporter.sendMail(options);
-      if (this.isDev) {
-        this.logger.log(
-          `\n========================================\n📧 Email Sent:\nTo: ${options.to as string}\nSubject: ${options.subject as string}\n========================================\n`,
-        );
-      }
+      this.logger.log(
+        `📧 Email Sent:\nTo: ${options.to as string}\nSubject: ${options.subject as string}`,
+      );
       return info;
     } catch (error) {
-      this.logger.error('Failed to send email:', error);
+      this.logger.error('Failed to send email via Nodemailer:', error);
       throw error;
     }
   }

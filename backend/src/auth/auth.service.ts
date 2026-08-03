@@ -133,18 +133,12 @@ export class AuthService {
       existingUser.twoFactorCode = twoFactorCode;
       existingUser.twoFactorExpiry = twoFactorExpiry;
 
-      // MUST await email sending
-      try {
-        await this.emailService.sendTwoFactorCodeEmail(
-          existingUser.email,
-          existingUser.username,
-          twoFactorCode,
-        );
-      } catch (err: unknown) {
-        throw new BadRequestException(
-          `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify your email configuration.`,
-        );
-      }
+      // Dispatch 2FA email
+      await this.emailService.sendTwoFactorCodeEmail(
+        existingUser.email,
+        existingUser.username,
+        twoFactorCode,
+      );
 
       await existingUser.save();
 
@@ -161,19 +155,6 @@ export class AuthService {
         tempToken,
         email: existingUser.email,
       };
-    }
-
-    // Attempt sending OTP email BEFORE creating new user record in DB
-    try {
-      await this.emailService.sendTwoFactorCodeEmail(
-        dto.email.toLowerCase(),
-        dto.username,
-        twoFactorCode,
-      );
-    } catch (err: unknown) {
-      throw new BadRequestException(
-        `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify email address and SMTP settings.`,
-      );
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -194,6 +175,9 @@ export class AuthService {
 
     // Create default settings
     await this.settingsModel.create({ userId: user._id });
+
+    // Dispatch 2FA email
+    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     const tempToken = await this.jwtService.signAsync(
       { sub: user._id.toString(), email: user.email, type: '2FA' },
@@ -234,13 +218,7 @@ export class AuthService {
     const twoFactorCode = this.generateMixed2FACode();
     const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    try {
-      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
-    } catch (err: unknown) {
-      throw new BadRequestException(
-        `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify email configuration.`,
-      );
-    }
+    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode,
