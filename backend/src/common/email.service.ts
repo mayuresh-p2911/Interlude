@@ -10,8 +10,12 @@ export class EmailService {
   private readonly fromAddress = 'Interlude <b440c5001@smtp-brevo.com>';
 
   constructor(private configService: ConfigService) {
-    const user = configService.get<string>('BREVO_SMTP_LOGIN');
-    const pass = configService.get<string>('BREVO_SMTP_KEY');
+    const user = (configService.get<string>('BREVO_SMTP_LOGIN') ?? '').trim();
+    const pass = (configService.get<string>('BREVO_SMTP_KEY') ?? '').trim().replace(/\s+/g, '');
+
+    if (!user || !pass) {
+      this.logger.error('❌ BREVO_SMTP_LOGIN or BREVO_SMTP_KEY env vars are not set!');
+    }
 
     this.transporter = nodemailer.createTransport({
       host: 'smtp-relay.brevo.com',
@@ -20,7 +24,7 @@ export class EmailService {
       auth: { user, pass },
     });
 
-    this.logger.log(`📧 Email service ready via Brevo SMTP`);
+    this.logger.log(`📧 Email service ready via Brevo SMTP (${user || 'NOT CONFIGURED'})`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
@@ -47,17 +51,13 @@ export class EmailService {
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
     this.logger.log(`🔑 Sending OTP ${code} to ${email}`);
-    try {
-      await this.transporter.sendMail({
-        from: this.fromAddress,
-        to: email,
-        subject: `Your INTERLUDE Security Code: ${code}`,
-        html: this.buildTwoFactorEmailHtml(username, code),
-      });
-      this.logger.log(`✅ OTP email sent to ${email}`);
-    } catch (err: unknown) {
-      this.logger.error(`❌ OTP email failed for ${email}: ${(err as Error)?.message}`);
-    }
+    await this.transporter.sendMail({
+      from: this.fromAddress,
+      to: email,
+      subject: `Your INTERLUDE Security Code: ${code}`,
+      html: this.buildTwoFactorEmailHtml(username, code),
+    });
+    this.logger.log(`✅ OTP email sent to ${email}`);
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
