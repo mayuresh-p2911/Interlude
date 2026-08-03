@@ -1,108 +1,76 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
+import axios from 'axios';
 
 @Injectable()
 export class EmailService {
-  private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
+  private readonly apiKey: string;
+  private readonly fromEmail = 'interlude209@gmail.com';
+  private readonly fromName = 'Interlude';
 
   constructor(private configService: ConfigService) {
-    const user = configService.get<string>('BREVO_SMTP_LOGIN');
-    const pass = configService.get<string>('BREVO_SMTP_KEY');
+    this.apiKey = this.configService.get<string>('BREVO_API_KEY') ?? '';
+    this.logger.log(`📧 Email service configured via Brevo HTTP API`);
+  }
 
-    this.transporter = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-    });
-
-    this.logger.log(`📧 Email service configured via Brevo SMTP`);
+  private async sendBrevoEmail(to: string, subject: string, html: string) {
+    await axios.post(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        sender: { name: this.fromName, email: this.fromEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      },
+      {
+        headers: {
+          'api-key': this.apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      },
+    );
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
-
-    const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
-      to: email,
-      subject: 'Verify your INTERLUDE account',
-      html: this.buildVerificationEmailHtml(username, verificationUrl),
-    };
-
-    await this.sendMail(mailOptions);
+    await this.sendBrevoEmail(email, 'Verify your INTERLUDE account', this.buildVerificationEmailHtml(username, verificationUrl));
   }
 
   async sendPasswordResetEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
-
-    const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
-      to: email,
-      subject: 'Reset your INTERLUDE password',
-      html: this.buildPasswordResetEmailHtml(username, resetUrl),
-    };
-
-    await this.sendMail(mailOptions);
+    await this.sendBrevoEmail(email, 'Reset your INTERLUDE password', this.buildPasswordResetEmailHtml(username, resetUrl));
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    this.logger.log(
-      `\n========================================\n🔑 [2FA OTP CODE] Email: ${email} | Code: ${code}\n========================================\n`,
-    );
-
-    const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
-      to: email,
-      subject: `Your INTERLUDE Security Verification Code: ${code}`,
-      html: this.buildTwoFactorEmailHtml(username, code),
-    };
-
+    this.logger.log(`🔑 Sending OTP to ${email}: ${code}`);
     try {
-      await this.sendMail(mailOptions);
-      this.logger.log(`✅ 2FA Email successfully delivered to ${email}`);
-    } catch (err: unknown) {
-      this.logger.error(
-        `⚠️ SMTP email delivery warning for ${email}: ${(err as Error)?.message || 'Delivery error'}`,
+      await this.sendBrevoEmail(
+        email,
+        `Your INTERLUDE Security Code: ${code}`,
+        this.buildTwoFactorEmailHtml(username, code),
       );
+      this.logger.log(`✅ OTP email delivered to ${email}`);
+    } catch (err: unknown) {
+      this.logger.error(`❌ Failed to send OTP to ${email}: ${(err as Error)?.message}`);
     }
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const sessionUrl = `${appUrl}/watch/${sessionId}`;
-
-    const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM') ?? 'interlude209@gmail.com',
-      to: email,
-      subject: `${fromUsername} invited you to watch ${movieTitle} on INTERLUDE`,
-      html: `
-        <div style="background:#0A0A0A;color:#fff;padding:40px;font-family:sans-serif;">
-          <h1 style="color:#3B82F6;">🎬 INTERLUDE</h1>
-          <p><strong>${fromUsername}</strong> has invited you to watch <strong>${movieTitle}</strong> together.</p>
-          <a href="${sessionUrl}" style="background:#2563EB;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px;">Join Watch Party</a>
-        </div>
-      `,
-    };
-
-    await this.sendMail(mailOptions);
-  }
-
-  private async sendMail(options: nodemailer.SendMailOptions) {
-    try {
-      const info = await this.transporter.sendMail(options);
-      this.logger.log(
-        `📧 Email Sent:\nTo: ${options.to as string}\nSubject: ${options.subject as string}`,
-      );
-      return info;
-    } catch (error) {
-      this.logger.error('Failed to send email via Nodemailer:', error);
-      throw error;
-    }
+    await this.sendBrevoEmail(
+      email,
+      `${fromUsername} invited you to watch ${movieTitle} on INTERLUDE`,
+      `<div style="background:#0A0A0A;color:#fff;padding:40px;font-family:sans-serif;">
+        <h1 style="color:#3B82F6;">🎬 INTERLUDE</h1>
+        <p><strong>${fromUsername}</strong> has invited you to watch <strong>${movieTitle}</strong> together.</p>
+        <a href="${sessionUrl}" style="background:#2563EB;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px;">Join Watch Party</a>
+      </div>`,
+    );
   }
 
   private buildVerificationEmailHtml(username: string, url: string): string {
