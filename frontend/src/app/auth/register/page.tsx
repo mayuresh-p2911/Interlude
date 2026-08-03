@@ -36,6 +36,7 @@ export default function RegisterPage() {
   // 2FA State
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [tempToken, setTempToken] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +56,7 @@ export default function RegisterPage() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const res = await register(
         username,
@@ -76,6 +78,7 @@ export default function RegisterPage() {
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (err as { message?: string })?.message ??
         'Registration failed. Please try again.';
 
       if (message.toLowerCase().includes('captcha')) {
@@ -83,6 +86,8 @@ export default function RegisterPage() {
         setRefreshTrigger((prev) => prev + 1);
       }
       toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -209,12 +214,12 @@ export default function RegisterPage() {
         <motion.button
           type="submit"
           id="register-submit"
-          disabled={isLoading}
+          disabled={isSubmitting || isLoading}
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
           className="btn-primary w-full py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed mt-2"
         >
-          {isLoading ? (
+          {isSubmitting || isLoading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Creating account...
