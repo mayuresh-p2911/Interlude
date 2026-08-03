@@ -12,22 +12,35 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     this.isDev = configService.get('NODE_ENV') !== 'production';
 
-    if (this.isDev && !configService.get('SMTP_HOST')) {
-      // Console transport for development — no SMTP server needed
+    const host = configService.get<string>('SMTP_HOST');
+    const user = configService.get<string>('SMTP_USER');
+    const pass = configService.get<string>('SMTP_PASSWORD');
+
+    if (!host) {
       this.transporter = nodemailer.createTransport({
         jsonTransport: true,
       });
-      this.logger.log('📧 Email service running in console mode (no SMTP configured)');
+      this.logger.log('📧 Email service running in console mode (no SMTP host configured)');
+    } else if (host.includes('gmail')) {
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user,
+          pass,
+        },
+      });
+      this.logger.log(`📧 Email service connected to Gmail SMTP (${user})`);
     } else {
       this.transporter = nodemailer.createTransport({
-        host: configService.get<string>('SMTP_HOST'),
+        host,
         port: configService.get<number>('SMTP_PORT') ?? 587,
         secure: false,
         auth: {
-          user: configService.get<string>('SMTP_USER'),
-          pass: configService.get<string>('SMTP_PASSWORD'),
+          user,
+          pass,
         },
       });
+      this.logger.log(`📧 Email service connected to SMTP (${host})`);
     }
   }
 
