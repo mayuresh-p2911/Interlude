@@ -60,6 +60,9 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
+    if (this.isDev) {
+      this.logger.log(`\n🔑 [DEV MODE 2FA CODE] Email: ${email} | Code: ${code}\n`);
+    }
     const mailOptions = {
       from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
       to: email,
@@ -94,7 +97,7 @@ export class EmailService {
     try {
       const info = await this.transporter.sendMail(options);
       if (this.isDev) {
-        this.logger.log(`📧 Email (console mode):\nTo: ${options.to as string}\nSubject: ${options.subject as string}`);
+        this.logger.log(`\n========================================\n📧 Email Sent (Dev Console Mode):\nTo: ${options.to as string}\nSubject: ${options.subject as string}\n========================================\n`);
       }
       return info;
     } catch (error) {

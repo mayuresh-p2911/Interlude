@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsNumber, Min, Max, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsEmail, IsString, IsNumber, Min, Max, MinLength, MaxLength, Matches, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -28,8 +28,12 @@ export class RegisterDto {
   password: string;
 
   @ApiProperty({ example: 'captcha_token_str', required: false })
+  @IsOptional()
+  @IsString()
   captchaToken?: string;
 
   @ApiProperty({ example: 'A5K8M', required: false })
+  @IsOptional()
+  @IsString()
   captchaInput?: string;
 }
