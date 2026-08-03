@@ -30,6 +30,8 @@ export default function RegisterPage() {
     captchaToken: '',
     captchaInput: '',
   });
+  const [captchaError, setCaptchaError] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // 2FA State
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -37,6 +39,8 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCaptchaError('');
+
     if (typeof age !== 'number' || age < 18) {
       toast.error('You must be at least 18 years old to register');
       return;
@@ -46,6 +50,7 @@ export default function RegisterPage() {
       return;
     }
     if (!captchaData.captchaInput) {
+      setCaptchaError('Please enter the CAPTCHA characters');
       toast.error('Please complete the CAPTCHA verification');
       return;
     }
@@ -72,6 +77,11 @@ export default function RegisterPage() {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'Registration failed. Please try again.';
+
+      if (message.toLowerCase().includes('captcha')) {
+        setCaptchaError(message);
+        setRefreshTrigger((prev) => prev + 1);
+      }
       toast.error(message);
     }
   };
@@ -190,7 +200,11 @@ export default function RegisterPage() {
         </div>
 
         {/* Human Verification (Dancing CAPTCHA) */}
-        <CaptchaWidget onCaptchaChange={(data) => setCaptchaData(data)} />
+        <CaptchaWidget
+          onCaptchaChange={(data) => setCaptchaData(data)}
+          refreshTrigger={refreshTrigger}
+          error={captchaError}
+        />
 
         <motion.button
           type="submit"

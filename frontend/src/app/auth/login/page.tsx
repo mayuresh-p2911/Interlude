@@ -23,6 +23,8 @@ export default function LoginPage() {
     captchaToken: '',
     captchaInput: '',
   });
+  const [captchaError, setCaptchaError] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // 2FA State
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -30,8 +32,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCaptchaError('');
 
     if (!captchaData.captchaInput) {
+      setCaptchaError('Please enter the CAPTCHA characters');
       toast.error('Please complete the CAPTCHA verification');
       return;
     }
@@ -57,6 +61,11 @@ export default function LoginPage() {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'Invalid email or password';
+
+      if (message.toLowerCase().includes('captcha')) {
+        setCaptchaError(message);
+        setRefreshTrigger((prev) => prev + 1);
+      }
       toast.error(message);
     }
   };
@@ -115,7 +124,11 @@ export default function LoginPage() {
         </div>
 
         {/* Human Verification (Dancing CAPTCHA) */}
-        <CaptchaWidget onCaptchaChange={(data) => setCaptchaData(data)} />
+        <CaptchaWidget
+          onCaptchaChange={(data) => setCaptchaData(data)}
+          refreshTrigger={refreshTrigger}
+          error={captchaError}
+        />
 
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer">

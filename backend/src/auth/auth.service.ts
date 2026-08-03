@@ -30,14 +30,18 @@ export class AuthService {
 
   // ── CAPTCHA Generation & Verification ────────────────────────
   async generateCaptcha() {
-    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijkmnpqrstuvwxyz';
     const numbers = '23456789';
+    const all = uppercase + lowercase + numbers;
+
     let code = '';
-    for (let i = 0; i < 3; i++) {
-      code += letters.charAt(Math.floor(Math.random() * letters.length));
-    }
+    // Ensure 1 uppercase, 1 lowercase, 1 number, plus 2 randoms (5 total)
+    code += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+    code += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+    code += numbers.charAt(Math.floor(Math.random() * numbers.length));
     for (let i = 0; i < 2; i++) {
-      code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+      code += all.charAt(Math.floor(Math.random() * all.length));
     }
     code = code.split('').sort(() => Math.random() - 0.5).join('');
 
@@ -59,8 +63,10 @@ export class AuthService {
     if (captchaToken.startsWith('fallback_')) {
       const parts = captchaToken.split('_');
       const expectedCode = parts[2];
-      if (!expectedCode || captchaInput.trim().toUpperCase() !== expectedCode.toUpperCase()) {
-        throw new BadRequestException('Incorrect CAPTCHA solution');
+      if (!expectedCode || captchaInput.trim() !== expectedCode) {
+        throw new BadRequestException(
+          'Incorrect CAPTCHA solution. Please check uppercase and lowercase characters.',
+        );
       }
       return;
     }
@@ -72,8 +78,10 @@ export class AuthService {
       if (payload.type !== 'CAPTCHA' || !payload.captchaCode) {
         throw new BadRequestException('Invalid CAPTCHA token');
       }
-      if (captchaInput.trim().toUpperCase() !== payload.captchaCode.toUpperCase()) {
-        throw new BadRequestException('Incorrect CAPTCHA solution');
+      if (captchaInput.trim() !== payload.captchaCode) {
+        throw new BadRequestException(
+          'Incorrect CAPTCHA solution. Please check uppercase and lowercase characters.',
+        );
       }
     } catch (err: unknown) {
       if (err instanceof BadRequestException) throw err;

@@ -6,10 +6,11 @@ import { authApi } from '@/lib/api';
 
 interface CaptchaWidgetProps {
   onCaptchaChange: (data: { captchaToken: string; captchaInput: string }) => void;
+  refreshTrigger?: number;
   error?: string;
 }
 
-export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetProps) {
+export default function CaptchaWidget({ onCaptchaChange, refreshTrigger, error }: CaptchaWidgetProps) {
   const [captchaToken, setCaptchaToken] = useState<string>('');
   const [captchaText, setCaptchaText] = useState<string>('');
   const [userInput, setUserInput] = useState<string>('');
@@ -17,7 +18,7 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
-  // Keep a stable ref to onCaptchaChange to prevent re-render infinite loops
+  // Keep a stable ref to onCaptchaChange to prevent re-render loops
   const onCaptchaChangeRef = useRef(onCaptchaChange);
   useEffect(() => {
     onCaptchaChangeRef.current = onCaptchaChange;
@@ -39,12 +40,20 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       onCaptchaChangeRef.current({ captchaToken: token, captchaInput: '' });
     } catch (err) {
       console.warn('Failed to fetch CAPTCHA from API, using client fallback:', err);
-      // Fallback captcha generation if backend API call fails
-      const fallbackLetters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const lowercase = 'abcdefghijkmnpqrstuvwxyz';
+      const numbers = '23456789';
+      const all = uppercase + lowercase + numbers;
+
       let text = '';
-      for (let i = 0; i < 5; i++) {
-        text += fallbackLetters.charAt(Math.floor(Math.random() * fallbackLetters.length));
+      text += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+      text += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+      text += numbers.charAt(Math.floor(Math.random() * numbers.length));
+      for (let i = 0; i < 2; i++) {
+        text += all.charAt(Math.floor(Math.random() * all.length));
       }
+      text = text.split('').sort(() => Math.random() - 0.5).join('');
+
       const fallbackToken = `fallback_${Date.now()}_${text}`;
       setCaptchaToken(fallbackToken);
       setCaptchaText(text);
@@ -56,16 +65,15 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
 
   useEffect(() => {
     fetchNewCaptcha();
-  }, [fetchNewCaptcha]);
+  }, [fetchNewCaptcha, refreshTrigger]);
 
-  // Update parent when user types input
+  // Handle case-sensitive user input (supports both uppercase, lowercase, and numbers)
   const handleInputChange = (val: string) => {
-    const uppercaseVal = val.toUpperCase();
-    setUserInput(uppercaseVal);
-    onCaptchaChangeRef.current({ captchaToken, captchaInput: uppercaseVal });
+    setUserInput(val);
+    onCaptchaChangeRef.current({ captchaToken, captchaInput: val });
   };
 
-  // Render dancing distorted letters on canvas
+  // Render dancing distorted mixed-case letters & numbers on canvas
   useEffect(() => {
     if (!captchaText || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -77,12 +85,16 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
 
     // Character dance configuration
     const charConfigs = captchaText.split('').map((char, index) => {
+      const isUpper = char >= 'A' && char <= 'Z';
+      const isNumber = char >= '0' && char <= '9';
       return {
         char,
-        baseX: 25 + index * 36,
+        isUpper,
+        isNumber,
+        baseX: 22 + index * 36,
         baseY: height / 2 + 4,
-        baseAngle: (Math.sin(index * 2.5) * 18 * Math.PI) / 180,
-        fontSize: 24 + (index % 3) * 4,
+        baseAngle: (Math.sin(index * 2.2) * 16 * Math.PI) / 180,
+        fontSize: isUpper ? 26 : isNumber ? 24 : 22,
         color: [
           '#60A5FA', // Blue ice
           '#3B82F6', // Electric blue
@@ -137,30 +149,30 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
         ctx.fillRect(nx, ny, 2, 2);
       }
 
-      // 4. Render Dancing & Distorted Characters
+      // 4. Render Dancing & Distorted Characters (Clear case distinction)
       charConfigs.forEach((cfg) => {
         ctx.save();
 
-        // Calculate dynamic dancing offsets (sine + cosine wave animation)
-        const floatY = Math.sin(elapsed * cfg.speed * 2 + cfg.phase) * 5;
+        // Dynamic dancing offsets (sine + cosine wave animation)
+        const floatY = Math.sin(elapsed * cfg.speed * 2 + cfg.phase) * 4;
         const danceAngle = cfg.baseAngle + Math.cos(elapsed * cfg.speed + cfg.phase) * 0.12;
 
         ctx.translate(cfg.baseX, cfg.baseY + floatY);
         ctx.rotate(danceAngle);
 
-        ctx.font = `900 ${cfg.fontSize}px sans-serif`;
+        ctx.font = `bold ${cfg.fontSize}px 'Outfit', 'Inter', monospace, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Glow effect
+        // Text glow & shadow
         ctx.shadowColor = cfg.color;
         ctx.shadowBlur = 6;
         ctx.fillStyle = cfg.color;
         ctx.fillText(cfg.char, 0, 0);
 
-        // White stroke outline for extra readability & distortion look
+        // White outline stroke for distinct character clarity
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 0.7;
         ctx.strokeText(cfg.char, 0, 0);
 
         ctx.restore();
@@ -198,9 +210,9 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       <div className="flex items-center justify-between">
         <label className="text-sm font-semibold text-white flex items-center gap-1.5">
           <ShieldCheckIcon className="w-4 h-4 text-blue-electric" />
-          Human Verification
+          Human Verification (CAPTCHA)
         </label>
-        <span className="text-xs text-text-muted">Type the dancing characters</span>
+        <span className="text-xs text-blue-ice/80 font-medium">Case-sensitive</span>
       </div>
 
       <div className="flex items-center gap-3">
@@ -211,7 +223,7 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
             height={54}
             className="block cursor-pointer select-none"
             onClick={fetchNewCaptcha}
-            title="Click to refresh CAPTCHA"
+            title="Click to refresh CAPTCHA challenge"
           />
           {loading && (
             <div className="absolute inset-0 bg-surface-1/80 backdrop-blur-sm flex items-center justify-center">
@@ -224,8 +236,8 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
           type="button"
           onClick={fetchNewCaptcha}
           disabled={loading}
-          className="p-3 rounded-xl bg-surface-3 border border-white/10 hover:bg-surface-1 hover:border-blue-electric/40 text-text-secondary hover:text-white transition-all active:scale-95 shrink-0"
-          title="Get a new challenge"
+          className="p-3.5 rounded-xl bg-surface-3 border border-white/10 hover:bg-surface-1 hover:border-blue-electric/40 text-text-secondary hover:text-white transition-all active:scale-95 shrink-0"
+          title="Get a new CAPTCHA challenge"
         >
           <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin text-blue-electric' : ''}`} />
         </button>
@@ -236,15 +248,23 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
           type="text"
           value={userInput}
           onChange={(e) => handleInputChange(e.target.value)}
-          placeholder="Enter dancing characters (e.g. A8K9M)"
+          placeholder="Enter characters exactly as shown (e.g. k7B9x)"
           maxLength={6}
-          className={`input-field tracking-widest uppercase font-mono font-bold text-center ${
-            error ? 'border-red-500/80 focus:border-red-500' : ''
+          className={`input-field font-mono font-bold text-center text-base tracking-wider ${
+            error ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
           }`}
           required
           autoComplete="off"
         />
-        {error && <p className="mt-1 text-xs text-red-400 font-medium">{error}</p>}
+        {error ? (
+          <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+            ⚠️ {error}
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-text-muted">
+            Enter uppercase letters, lowercase letters, and numbers matching the image.
+          </p>
+        )}
       </div>
     </div>
   );
