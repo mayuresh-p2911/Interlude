@@ -9,18 +9,17 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private configService: ConfigService) {
-    const user = configService.get<string>('SMTP_USER') || 'interlude209@gmail.com';
-    const pass = configService.get<string>('SMTP_PASSWORD') || 'rgeqvxysvkgocexc';
+    const user = configService.get<string>('BREVO_SMTP_LOGIN');
+    const pass = configService.get<string>('BREVO_SMTP_KEY');
 
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: user.trim(),
-        pass: pass.trim().replace(/\s+/g, ''),
-      },
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: { user, pass },
     });
 
-    this.logger.log(`📧 Email service configured for SMTP user: ${user}`);
+    this.logger.log(`📧 Email service configured via Brevo SMTP`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
