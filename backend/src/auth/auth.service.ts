@@ -146,12 +146,7 @@ export class AuthService {
         },
       );
 
-      // Send OTP email in background — do not block the response
-      void this.emailService
-        .sendTwoFactorCodeEmail(existingUser.email, existingUser.username, twoFactorCode)
-        .catch((err: unknown) =>
-          this.logger.error(`Failed to send OTP email to ${existingUser.email}: ${(err as Error)?.message}`),
-        );
+      await this.emailService.sendTwoFactorCodeEmail(existingUser.email, existingUser.username, twoFactorCode);
 
       return {
         requires2FA: true,
@@ -187,12 +182,7 @@ export class AuthService {
       },
     );
 
-    // Send OTP email in background — do not block the response
-    void this.emailService
-      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
-      .catch((err: unknown) =>
-        this.logger.error(`Failed to send OTP email to ${user.email}: ${(err as Error)?.message}`),
-      );
+    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     return {
       requires2FA: true,
