@@ -63,9 +63,10 @@ export class EmailService {
     this.logger.log(`🔑 [INTERLUDE OTP] Code for ${email} is: ${code}`);
 
     const mailOptions = {
-      from: 'interlude209@gmail.com',
+      from: 'INTERLUDE <interlude209@gmail.com>',
       to: email,
-      subject: 'Verify your INTERLUDE Account',
+      subject: `Your INTERLUDE Security Code: ${code}`,
+      text: `Welcome, ${username || 'User'}! Your INTERLUDE verification code is: ${code}. This code expires in 10 minutes.`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; text-align: center;">
           <h2>INTERLUDE Verification</h2>
