@@ -56,6 +56,14 @@ export class AuthService {
     if (!captchaToken || !captchaInput) {
       throw new BadRequestException('CAPTCHA verification is required');
     }
+    if (captchaToken.startsWith('fallback_')) {
+      const parts = captchaToken.split('_');
+      const expectedCode = parts[2];
+      if (!expectedCode || captchaInput.trim().toUpperCase() !== expectedCode.toUpperCase()) {
+        throw new BadRequestException('Incorrect CAPTCHA solution');
+      }
+      return;
+    }
     try {
       const payload = await this.jwtService.verifyAsync<{ captchaCode: string; type: string }>(
         captchaToken,

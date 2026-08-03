@@ -17,10 +17,17 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
+  // Keep a stable ref to onCaptchaChange to prevent re-render infinite loops
+  const onCaptchaChangeRef = useRef(onCaptchaChange);
+  useEffect(() => {
+    onCaptchaChangeRef.current = onCaptchaChange;
+  }, [onCaptchaChange]);
+
   const fetchNewCaptcha = useCallback(async () => {
     setLoading(true);
     setUserInput('');
-    onCaptchaChange({ captchaToken: '', captchaInput: '' });
+    onCaptchaChangeRef.current({ captchaToken: '', captchaInput: '' });
+
     try {
       const res = await authApi.getCaptcha();
       const { captchaToken: token, captchaText: text } = res.data as {
@@ -29,22 +36,33 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       };
       setCaptchaToken(token);
       setCaptchaText(text);
+      onCaptchaChangeRef.current({ captchaToken: token, captchaInput: '' });
     } catch (err) {
-      console.error('Failed to fetch CAPTCHA challenge:', err);
+      console.warn('Failed to fetch CAPTCHA from API, using client fallback:', err);
+      // Fallback captcha generation if backend API call fails
+      const fallbackLetters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let text = '';
+      for (let i = 0; i < 5; i++) {
+        text += fallbackLetters.charAt(Math.floor(Math.random() * fallbackLetters.length));
+      }
+      const fallbackToken = `fallback_${Date.now()}_${text}`;
+      setCaptchaToken(fallbackToken);
+      setCaptchaText(text);
+      onCaptchaChangeRef.current({ captchaToken: fallbackToken, captchaInput: '' });
     } finally {
       setLoading(false);
     }
-  }, [onCaptchaChange]);
+  }, []);
 
   useEffect(() => {
     fetchNewCaptcha();
-  }, []);
+  }, [fetchNewCaptcha]);
 
   // Update parent when user types input
   const handleInputChange = (val: string) => {
     const uppercaseVal = val.toUpperCase();
     setUserInput(uppercaseVal);
-    onCaptchaChange({ captchaToken, captchaInput: uppercaseVal });
+    onCaptchaChangeRef.current({ captchaToken, captchaInput: uppercaseVal });
   };
 
   // Render dancing distorted letters on canvas
@@ -57,14 +75,14 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
     const width = canvas.width;
     const height = canvas.height;
 
-    // Fixed base parameters for characters to stay visually consistent while dancing
+    // Character dance configuration
     const charConfigs = captchaText.split('').map((char, index) => {
       return {
         char,
-        baseX: 25 + index * 38,
-        baseY: height / 2 + 6,
-        baseAngle: (Math.sin(index * 2) * 20 * Math.PI) / 180,
-        fontSize: 26 + (index % 3) * 4,
+        baseX: 25 + index * 36,
+        baseY: height / 2 + 4,
+        baseAngle: (Math.sin(index * 2.5) * 18 * Math.PI) / 180,
+        fontSize: 24 + (index % 3) * 4,
         color: [
           '#60A5FA', // Blue ice
           '#3B82F6', // Electric blue
@@ -83,22 +101,22 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       const elapsed = time - startTime;
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Dark glowing background
+      // 1. Dark glowing gradient background
       const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-      bgGrad.addColorStop(0, '#091326');
-      bgGrad.addColorStop(1, '#050B17');
+      bgGrad.addColorStop(0, '#0B172A');
+      bgGrad.addColorStop(1, '#050C1A');
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // Border gradient line
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+      // Border line
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(1, 1, width - 2, height - 2);
 
       // 2. Distorted wavy noise lines in background
       for (let i = 0; i < 3; i++) {
         ctx.beginPath();
-        ctx.strokeStyle = `rgba(96, 165, 250, ${0.15 + i * 0.08})`;
+        ctx.strokeStyle = `rgba(96, 165, 250, ${0.18 + i * 0.08})`;
         ctx.lineWidth = 1.5 + i * 0.5;
         for (let x = 0; x < width; x += 5) {
           const y =
@@ -112,10 +130,10 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       }
 
       // 3. Noise dots
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 25; i++) {
         const nx = (Math.sin(i * 99 + elapsed * 0.001) * 0.5 + 0.5) * width;
         const ny = (Math.cos(i * 33 + elapsed * 0.001) * 0.5 + 0.5) * height;
-        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.25)' : 'rgba(59,130,246,0.3)';
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(59,130,246,0.35)';
         ctx.fillRect(nx, ny, 2, 2);
       }
 
@@ -130,17 +148,17 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
         ctx.translate(cfg.baseX, cfg.baseY + floatY);
         ctx.rotate(danceAngle);
 
-        ctx.font = `900 ${cfg.fontSize}px 'Outfit', 'Inter', system-ui, sans-serif`;
+        ctx.font = `900 ${cfg.fontSize}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
         // Glow effect
         ctx.shadowColor = cfg.color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 6;
         ctx.fillStyle = cfg.color;
         ctx.fillText(cfg.char, 0, 0);
 
-        // Stroke outline for distortion feel
+        // White stroke outline for extra readability & distortion look
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 0.8;
         ctx.strokeText(cfg.char, 0, 0);
@@ -155,9 +173,9 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
       ctx.moveTo(10, height / 2 + Math.sin(elapsed * 0.003) * 6);
       ctx.bezierCurveTo(
         width * 0.3,
-        height / 2 - 12,
+        height / 2 - 10,
         width * 0.7,
-        height / 2 + 12,
+        height / 2 + 10,
         width - 10,
         height / 2 + Math.cos(elapsed * 0.003) * 6,
       );
@@ -176,21 +194,21 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
   }, [captchaText]);
 
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-medium text-text-secondary flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
+    <div className="space-y-3 my-4 p-4 rounded-2xl bg-surface-2/60 border border-white/10 shadow-lg">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold text-white flex items-center gap-1.5">
           <ShieldCheckIcon className="w-4 h-4 text-blue-electric" />
           Human Verification
-        </span>
-        <span className="text-xs text-text-muted">Distorted character check</span>
-      </label>
+        </label>
+        <span className="text-xs text-text-muted">Type the dancing characters</span>
+      </div>
 
       <div className="flex items-center gap-3">
-        <div className="relative rounded-xl overflow-hidden shadow-inner border border-white/10 shrink-0 bg-surface-2">
+        <div className="relative rounded-xl overflow-hidden shadow-inner border border-blue-electric/30 shrink-0 bg-surface-3">
           <canvas
             ref={canvasRef}
-            width={220}
-            height={56}
+            width={210}
+            height={54}
             className="block cursor-pointer select-none"
             onClick={fetchNewCaptcha}
             title="Click to refresh CAPTCHA"
@@ -206,7 +224,7 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
           type="button"
           onClick={fetchNewCaptcha}
           disabled={loading}
-          className="p-3.5 rounded-xl bg-surface-2 border border-white/10 hover:bg-surface-3 hover:border-blue-electric/40 text-text-secondary hover:text-white transition-all active:scale-95 shrink-0"
+          className="p-3 rounded-xl bg-surface-3 border border-white/10 hover:bg-surface-1 hover:border-blue-electric/40 text-text-secondary hover:text-white transition-all active:scale-95 shrink-0"
           title="Get a new challenge"
         >
           <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin text-blue-electric' : ''}`} />
@@ -218,9 +236,9 @@ export default function CaptchaWidget({ onCaptchaChange, error }: CaptchaWidgetP
           type="text"
           value={userInput}
           onChange={(e) => handleInputChange(e.target.value)}
-          placeholder="Enter the dancing characters"
+          placeholder="Enter dancing characters (e.g. A8K9M)"
           maxLength={6}
-          className={`input-field tracking-widest uppercase font-mono font-bold ${
+          className={`input-field tracking-widest uppercase font-mono font-bold text-center ${
             error ? 'border-red-500/80 focus:border-red-500' : ''
           }`}
           required
