@@ -60,7 +60,6 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    this.logger.log(`🔑 [INTERLUDE OTP] Code for ${email} is: ${code}`);
 
     const mailOptions = {
       from: 'INTERLUDE <interlude209@gmail.com>',
