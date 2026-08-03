@@ -34,9 +34,9 @@ export class EmailService {
       port: 465,
       secure: true,
       auth: { user, pass },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000,
     });
 
     this.logger.log(`📧 Email service ready via Gmail SSL 465 (${user})`);
@@ -65,14 +65,19 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    await this.transporter.sendMail({
-      from: 'INTERLUDE <interlude209@gmail.com>',
-      to: email,
-      subject: `Your INTERLUDE Security Code: ${code}`,
-      text: `Welcome, ${username || 'User'}! Your INTERLUDE verification code is: ${code}. This code expires in 10 minutes.`,
-      html: this.buildTwoFactorEmailHtml(username, code),
-    });
-    this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
+    try {
+      await this.transporter.sendMail({
+        from: 'INTERLUDE <interlude209@gmail.com>',
+        to: email,
+        subject: `Your INTERLUDE Security Code: ${code}`,
+        text: `Welcome, ${username || 'User'}! Your INTERLUDE verification code is: ${code}. This code expires in 10 minutes.`,
+        html: this.buildTwoFactorEmailHtml(username, code),
+      });
+      this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
+    } catch (err: unknown) {
+      this.logger.error(`❌ [INTERLUDE OTP] SMTP failure for ${email}: ${(err as Error)?.message ?? String(err)}`);
+      throw err;
+    }
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
