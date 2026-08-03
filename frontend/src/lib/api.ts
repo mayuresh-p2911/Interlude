@@ -52,6 +52,9 @@ api.interceptors.response.use(
       '/auth/forgot-password',
       '/auth/reset-password',
       '/auth/verify-email',
+      '/auth/captcha',
+      '/auth/verify-2fa',
+      '/auth/resend-2fa',
     ];
     const isNonRefreshable = NON_REFRESHABLE_ENDPOINTS.some((ep) =>
       originalRequest?.url?.includes(ep),
@@ -105,10 +108,24 @@ export default api;
 // ── API Helper Functions ──────────────────────────────────────
 
 export const authApi = {
-  register: (data: { username: string; email: string; password: string; age: number }) =>
-    api.post('/auth/register', data),
-  login: (data: { email: string; password: string; rememberMe?: boolean }) =>
-    api.post('/auth/login', data),
+  getCaptcha: () => api.get('/auth/captcha'),
+  register: (data: {
+    username: string;
+    email: string;
+    password: string;
+    age: number;
+    captchaToken?: string;
+    captchaInput?: string;
+  }) => api.post('/auth/register', data),
+  login: (data: {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+    captchaToken?: string;
+    captchaInput?: string;
+  }) => api.post('/auth/login', data),
+  verify2FA: (data: { tempToken: string; code: string }) => api.post('/auth/verify-2fa', data),
+  resend2FA: (data: { tempToken: string }) => api.post('/auth/resend-2fa', data),
   logout: () => api.post('/auth/logout'),
   refresh: () => api.post('/auth/refresh'),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),

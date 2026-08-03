@@ -26,4 +26,10 @@ export class RegisterDto {
   @MinLength(8)
   @MaxLength(128)
   password: string;
+
+  @ApiProperty({ example: 'captcha_token_str', required: false })
+  captchaToken?: string;
+
+  @ApiProperty({ example: 'A5K8M', required: false })
+  captchaInput?: string;
 }

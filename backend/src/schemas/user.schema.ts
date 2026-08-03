@@ -67,6 +67,12 @@ export class User {
   @Prop({ type: Date, default: null, select: false })
   passwordResetExpiry: Date | null;
 
+  @Prop({ type: String, default: null, select: false })
+  twoFactorCode: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  twoFactorExpiry: Date | null;
+
   @Prop({ type: Date, default: null })
   lastSeen: Date | null;
 }

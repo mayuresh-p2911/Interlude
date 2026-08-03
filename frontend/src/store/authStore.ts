@@ -16,14 +16,34 @@ interface AuthUser {
   onlineStatus: string;
 }
 
+interface AuthResponse2FA {
+  requires2FA: boolean;
+  tempToken?: string;
+  email?: string;
+}
+
 interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  register: (username: string, email: string, password: string, age: number) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    captchaToken?: string,
+    captchaInput?: string,
+    rememberMe?: boolean,
+  ) => Promise<AuthResponse2FA>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+    age: number,
+    captchaToken?: string,
+    captchaInput?: string,
+  ) => Promise<AuthResponse2FA>;
+  verify2FA: (tempToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   setUser: (user: AuthUser) => void;
@@ -39,23 +59,47 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       isAuthenticated: false,
 
-      login: async (email, password, rememberMe) => {
+      login: async (email, password, captchaToken, captchaInput, rememberMe) => {
         set({ isLoading: true });
         try {
-          const res = await authApi.login({ email, password, rememberMe });
-          const { user, accessToken } = res.data as { user: AuthUser; accessToken: string };
-          localStorage.setItem('access_token', accessToken);
-          set({ user, accessToken, isAuthenticated: true, isLoading: false });
+          const res = await authApi.login({
+            email,
+            password,
+            rememberMe,
+            captchaToken,
+            captchaInput,
+          });
+          set({ isLoading: false });
+          return res.data as AuthResponse2FA;
         } catch (error) {
           set({ isLoading: false });
           throw error;
         }
       },
 
-      register: async (username, email, password, age) => {
+      register: async (username, email, password, age, captchaToken, captchaInput) => {
         set({ isLoading: true });
         try {
-          const res = await authApi.register({ username, email, password, age });
+          const res = await authApi.register({
+            username,
+            email,
+            password,
+            age,
+            captchaToken,
+            captchaInput,
+          });
+          set({ isLoading: false });
+          return res.data as AuthResponse2FA;
+        } catch (error) {
+          set({ isLoading: false });
+          throw error;
+        }
+      },
+
+      verify2FA: async (tempToken, code) => {
+        set({ isLoading: true });
+        try {
+          const res = await authApi.verify2FA({ tempToken, code });
           const { user, accessToken } = res.data as { user: AuthUser; accessToken: string };
           localStorage.setItem('access_token', accessToken);
           set({ user, accessToken, isAuthenticated: true, isLoading: false });

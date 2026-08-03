@@ -59,6 +59,17 @@ export class EmailService {
     await this.sendMail(mailOptions);
   }
 
+  async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') ?? 'noreply@interlude.app',
+      to: email,
+      subject: `Your INTERLUDE Security Verification Code: ${code}`,
+      html: this.buildTwoFactorEmailHtml(username, code),
+    };
+
+    await this.sendMail(mailOptions);
+  }
+
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const sessionUrl = `${appUrl}/watch/${sessionId}`;
@@ -150,4 +161,36 @@ export class EmailService {
       </html>
     `;
   }
+
+  private buildTwoFactorEmailHtml(username: string, code: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <body style="margin:0;padding:0;background:#0A0A0A;font-family:'Segoe UI',sans-serif;">
+        <div style="max-width:600px;margin:40px auto;background:#081B33;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+          <div style="background:linear-gradient(135deg,#2563EB,#081B33);padding:36px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:32px;letter-spacing:4px;">INTERLUDE</h1>
+            <p style="color:#60A5FA;margin:8px 0 0;font-size:14px;">Two-Factor Security Verification</p>
+          </div>
+          <div style="padding:40px;text-align:center;">
+            <h2 style="color:#fff;margin-top:0;">Authentication Code</h2>
+            <p style="color:#94A3B8;line-height:1.6;font-size:15px;">
+              Hi ${username}, use the following 6-character code to complete your verification:
+            </p>
+            <div style="margin:32px 0;">
+              <span style="background:rgba(37,99,235,0.15);border:2px dashed #2563EB;color:#60A5FA;font-size:36px;font-weight:800;letter-spacing:10px;padding:16px 32px;border-radius:12px;display:inline-block;font-family:monospace;">
+                ${code}
+              </span>
+            </div>
+            <p style="color:#64748B;font-size:14px;margin-bottom:0;">
+              This verification code will expire in <strong>10 minutes</strong>.<br/>
+              If you did not attempt to sign in or sign up, please secure your account immediately.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
 }
+

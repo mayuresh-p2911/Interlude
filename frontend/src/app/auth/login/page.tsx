@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
-import { authApi } from '@/lib/api';
+import CaptchaWidget from '@/components/auth/CaptchaWidget';
+import TwoFactorModal from '@/components/auth/TwoFactorModal';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,12 +18,41 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // CAPTCHA State
+  const [captchaData, setCaptchaData] = useState<{ captchaToken: string; captchaInput: string }>({
+    captchaToken: '',
+    captchaInput: '',
+  });
+
+  // 2FA State
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!captchaData.captchaInput) {
+      toast.error('Please complete the CAPTCHA verification');
+      return;
+    }
+
     try {
-      await login(email, password, rememberMe);
-      toast.success('Welcome back! 🎬');
-      window.location.href = '/home';
+      const res = await login(
+        email,
+        password,
+        captchaData.captchaToken,
+        captchaData.captchaInput,
+        rememberMe,
+      );
+
+      if (res?.requires2FA && res.tempToken) {
+        setTempToken(res.tempToken);
+        setShow2FAModal(true);
+        toast.success('Security code sent to your email! 📩');
+      } else {
+        toast.success('Welcome back! 🎬');
+        window.location.href = '/home';
+      }
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -84,6 +114,9 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Human Verification (Dancing CAPTCHA) */}
+        <CaptchaWidget onCaptchaChange={(data) => setCaptchaData(data)} />
+
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -128,6 +161,17 @@ export default function LoginPage() {
           Create one free
         </Link>
       </p>
+
+      {/* 2FA Verification Modal */}
+      <TwoFactorModal
+        isOpen={show2FAModal}
+        tempToken={tempToken}
+        email={email}
+        onSuccess={() => {
+          window.location.href = '/home';
+        }}
+        onCancel={() => setShow2FAModal(false)}
+      />
     </div>
   );
 }

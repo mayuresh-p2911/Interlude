@@ -7,6 +7,8 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { EyeIcon, EyeSlashIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
+import CaptchaWidget from '@/components/auth/CaptchaWidget';
+import TwoFactorModal from '@/components/auth/TwoFactorModal';
 
 const passwordRequirements = [
   { label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
@@ -23,6 +25,16 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // CAPTCHA State
+  const [captchaData, setCaptchaData] = useState<{ captchaToken: string; captchaInput: string }>({
+    captchaToken: '',
+    captchaInput: '',
+  });
+
+  // 2FA State
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (typeof age !== 'number' || age < 18) {
@@ -33,10 +45,29 @@ export default function RegisterPage() {
       toast.error('Please meet all password requirements');
       return;
     }
+    if (!captchaData.captchaInput) {
+      toast.error('Please complete the CAPTCHA verification');
+      return;
+    }
+
     try {
-      await register(username, email, password, Number(age));
-      toast.success("Account created! Check your email to verify. 🎬");
-      window.location.href = '/home';
+      const res = await register(
+        username,
+        email,
+        password,
+        Number(age),
+        captchaData.captchaToken,
+        captchaData.captchaInput,
+      );
+
+      if (res?.requires2FA && res.tempToken) {
+        setTempToken(res.tempToken);
+        setShow2FAModal(true);
+        toast.success('Security verification code sent to your email! 📩');
+      } else {
+        toast.success('Account created! Welcome to INTERLUDE 🎬');
+        window.location.href = '/home';
+      }
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -158,6 +189,9 @@ export default function RegisterPage() {
           )}
         </div>
 
+        {/* Human Verification (Dancing CAPTCHA) */}
+        <CaptchaWidget onCaptchaChange={(data) => setCaptchaData(data)} />
+
         <motion.button
           type="submit"
           id="register-submit"
@@ -187,6 +221,17 @@ export default function RegisterPage() {
           Sign in
         </Link>
       </p>
+
+      {/* 2FA Verification Modal */}
+      <TwoFactorModal
+        isOpen={show2FAModal}
+        tempToken={tempToken}
+        email={email}
+        onSuccess={() => {
+          window.location.href = '/home';
+        }}
+        onCancel={() => setShow2FAModal(false)}
+      />
     </div>
   );
 }

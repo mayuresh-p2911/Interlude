@@ -14,6 +14,32 @@ export class LoginDto {
   @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;
+
+  @ApiPropertyOptional({ example: 'captcha_token_str' })
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+
+  @ApiPropertyOptional({ example: 'A5K8M' })
+  @IsOptional()
+  @IsString()
+  captchaInput?: string;
+}
+
+export class VerifyTwoFactorDto {
+  @ApiProperty({ example: '2fa_temp_token_here' })
+  @IsString()
+  tempToken: string;
+
+  @ApiProperty({ example: 'A8K9M2' })
+  @IsString()
+  code: string;
+}
+
+export class ResendTwoFactorDto {
+  @ApiProperty({ example: '2fa_temp_token_here' })
+  @IsString()
+  tempToken: string;
 }
 
 export class ForgotPasswordDto {

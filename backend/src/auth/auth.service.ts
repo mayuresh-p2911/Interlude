@@ -4,7 +4,6 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
-  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -29,8 +28,70 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
+  // ── CAPTCHA Generation & Verification ────────────────────────
+  async generateCaptcha() {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const numbers = '23456789';
+    let code = '';
+    for (let i = 0; i < 3; i++) {
+      code += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    for (let i = 0; i < 2; i++) {
+      code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    }
+    code = code.split('').sort(() => Math.random() - 0.5).join('');
+
+    const token = await this.jwtService.signAsync(
+      { captchaCode: code, type: 'CAPTCHA' },
+      {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: '5m',
+      },
+    );
+
+    return { captchaToken: token, captchaText: code };
+  }
+
+  private async verifyCaptcha(captchaToken?: string, captchaInput?: string) {
+    if (!captchaToken || !captchaInput) {
+      throw new BadRequestException('CAPTCHA verification is required');
+    }
+    try {
+      const payload = await this.jwtService.verifyAsync<{ captchaCode: string; type: string }>(
+        captchaToken,
+        { secret: this.configService.get<string>('JWT_SECRET') },
+      );
+      if (payload.type !== 'CAPTCHA' || !payload.captchaCode) {
+        throw new BadRequestException('Invalid CAPTCHA token');
+      }
+      if (captchaInput.trim().toUpperCase() !== payload.captchaCode.toUpperCase()) {
+        throw new BadRequestException('Incorrect CAPTCHA solution');
+      }
+    } catch (err: unknown) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException('Invalid or expired CAPTCHA code');
+    }
+  }
+
+  // ── 2FA Helper ────────────────────────────────────────────────
+  private generateMixed2FACode(): string {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const numbers = '23456789';
+    let code = '';
+    // Ensure both letters AND numbers are mixed (e.g., 3 letters + 3 numbers)
+    for (let i = 0; i < 3; i++) {
+      code += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    for (let i = 0; i < 3; i++) {
+      code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    }
+    return code.split('').sort(() => Math.random() - 0.5).join('');
+  }
+
   // ── Register ────────────────────────────────────────────────
   async register(dto: RegisterDto) {
+    await this.verifyCaptcha(dto.captchaToken, dto.captchaInput);
+
     const existingUser = await this.userModel.findOne({
       $or: [{ email: dto.email.toLowerCase() }, { username: dto.username }],
     });
@@ -47,6 +108,9 @@ export class AuthService {
     const verificationToken = uuidv4();
     const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    const twoFactorCode = this.generateMixed2FACode();
+    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
     const user = await this.userModel.create({
       username: dto.username,
       email: dto.email.toLowerCase(),
@@ -54,30 +118,40 @@ export class AuthService {
       password: hashedPassword,
       emailVerificationToken: verificationToken,
       emailVerificationExpiry: verificationExpiry,
+      twoFactorCode,
+      twoFactorExpiry,
     });
 
     // Create default settings
     await this.settingsModel.create({ userId: user._id });
 
-    // Send verification email (non-blocking)
+    // Send initial verification & 2FA email
     this.emailService
-      .sendVerificationEmail(user.email, user.username, verificationToken)
-      .catch((err: unknown) => console.error('Failed to send verification email:', err));
+      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
+      .catch((err: unknown) => console.error('Failed to send 2FA email:', err));
 
-    const tokens = await this.generateTokens(user);
-    await this.updateRefreshToken(user._id.toString(), tokens.refreshToken);
+    const tempToken = await this.jwtService.signAsync(
+      { sub: user._id.toString(), email: user.email, type: '2FA' },
+      {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: '10m',
+      },
+    );
 
     return {
-      user: this.sanitizeUser(user),
-      tokens,
+      requires2FA: true,
+      tempToken,
+      email: user.email,
     };
   }
 
   // ── Login ────────────────────────────────────────────────────
   async login(dto: LoginDto) {
+    await this.verifyCaptcha(dto.captchaToken, dto.captchaInput);
+
     const user = await this.userModel
       .findOne({ email: dto.email.toLowerCase() })
-      .select('+password +refreshToken');
+      .select('+password +twoFactorCode +twoFactorExpiry');
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -92,19 +166,112 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const tokens = await this.generateTokens(user);
-    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+    const twoFactorCode = this.generateMixed2FACode();
+    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Single atomic update for refresh token and online status
     await this.userModel.findByIdAndUpdate(user._id, {
-      refreshToken: hashedToken,
+      twoFactorCode,
+      twoFactorExpiry,
+    });
+
+    this.emailService
+      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
+      .catch((err: unknown) => console.error('Failed to send 2FA email:', err));
+
+    const tempToken = await this.jwtService.signAsync(
+      { sub: user._id.toString(), email: user.email, rememberMe: !!dto.rememberMe, type: '2FA' },
+      {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: '10m',
+      },
+    );
+
+    return {
+      requires2FA: true,
+      tempToken,
+      email: user.email,
+    };
+  }
+
+  // ── Verify 2FA ────────────────────────────────────────────────
+  async verifyTwoFactor(tempToken: string, code: string) {
+    let payload: { sub: string; email: string; rememberMe?: boolean; type: string };
+    try {
+      payload = await this.jwtService.verifyAsync(tempToken, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+      if (payload.type !== '2FA' || !payload.sub) {
+        throw new UnauthorizedException('Invalid 2FA session');
+      }
+    } catch {
+      throw new UnauthorizedException('2FA session expired or invalid. Please sign in again.');
+    }
+
+    const user = await this.userModel
+      .findById(payload.sub)
+      .select('+twoFactorCode +twoFactorExpiry +refreshToken');
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (
+      !user.twoFactorCode ||
+      !user.twoFactorExpiry ||
+      user.twoFactorExpiry < new Date() ||
+      user.twoFactorCode.toUpperCase() !== code.trim().toUpperCase()
+    ) {
+      throw new BadRequestException('Invalid or expired 2FA code');
+    }
+
+    // Clear 2FA code and mark online
+    await this.userModel.findByIdAndUpdate(user._id, {
+      twoFactorCode: null,
+      twoFactorExpiry: null,
       onlineStatus: 'online',
     });
+
+    const tokens = await this.generateTokens(user);
+    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+    await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedToken });
 
     return {
       user: this.sanitizeUser(user),
       tokens,
+      rememberMe: payload.rememberMe,
     };
+  }
+
+  // ── Resend 2FA ────────────────────────────────────────────────
+  async resendTwoFactor(tempToken: string) {
+    let payload: { sub: string; email: string; type: string };
+    try {
+      payload = await this.jwtService.verifyAsync(tempToken, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+      if (payload.type !== '2FA' || !payload.sub) {
+        throw new UnauthorizedException('Invalid 2FA session');
+      }
+    } catch {
+      throw new UnauthorizedException('2FA session expired. Please sign in again.');
+    }
+
+    const user = await this.userModel.findById(payload.sub);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const twoFactorCode = this.generateMixed2FACode();
+    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.userModel.findByIdAndUpdate(user._id, {
+      twoFactorCode,
+      twoFactorExpiry,
+    });
+
+    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
+
+    return { message: 'A new 2FA code has been sent to your email.' };
   }
 
   // ── Logout ───────────────────────────────────────────────────
@@ -146,7 +313,6 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
 
-    // Always return success to prevent email enumeration
     if (!user) {
       return { message: 'If that email exists, a reset link has been sent' };
     }
@@ -255,6 +421,8 @@ export class AuthService {
     delete obj.emailVerificationExpiry;
     delete obj.passwordResetToken;
     delete obj.passwordResetExpiry;
+    delete obj.twoFactorCode;
+    delete obj.twoFactorExpiry;
     return obj;
   }
 }

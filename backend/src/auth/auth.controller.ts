@@ -13,9 +13,15 @@ import { Response, Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
-import { LoginDto, ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto } from './dto/auth.dto';
+import {
+  LoginDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+  VerifyTwoFactorDto,
+  ResendTwoFactorDto,
+} from './dto/auth.dto';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 
@@ -29,22 +35,46 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Get('captcha')
+  @ApiOperation({ summary: 'Generate a new CAPTCHA challenge' })
+  async getCaptcha() {
+    return this.authService.generateCaptcha();
+  }
+
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto);
-    this.setRefreshCookie(res, result.tokens.refreshToken);
-    return { user: result.user, accessToken: result.tokens.accessToken };
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.login(dto);
-    this.setRefreshCookie(res, result.tokens.refreshToken, dto.rememberMe);
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
+
+  @Public()
+  @Post('verify-2fa')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify 2FA code sent to email' })
+  async verifyTwoFactor(
+    @Body() dto: VerifyTwoFactorDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyTwoFactor(dto.tempToken, dto.code);
+    this.setRefreshCookie(res, result.tokens.refreshToken, result.rememberMe);
     return { user: result.user, accessToken: result.tokens.accessToken };
+  }
+
+  @Public()
+  @Post('resend-2fa')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend 2FA code to email' })
+  async resendTwoFactor(@Body() dto: ResendTwoFactorDto) {
+    return this.authService.resendTwoFactor(dto.tempToken);
   }
 
   @Post('logout')
