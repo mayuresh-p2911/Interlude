@@ -7,24 +7,20 @@ import { Transporter } from 'nodemailer';
 export class EmailService {
   private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
-  private readonly fromAddress = 'Interlude <b440c5001@smtp-brevo.com>';
+  private fromAddress: string;
 
   constructor(private configService: ConfigService) {
-    const user = (configService.get<string>('BREVO_SMTP_LOGIN') ?? '').trim();
-    const pass = (configService.get<string>('BREVO_SMTP_KEY') ?? '').trim().replace(/\s+/g, '');
+    const user = (this.configService.get<string>('EMAIL_USER') || 'ankricandle@gmail.com').trim();
+    const pass = (this.configService.get<string>('EMAIL_PASS') || 'ggmcykoafwmdgpih').trim().replace(/\s+/g, '');
 
-    if (!user || !pass) {
-      this.logger.error('❌ BREVO_SMTP_LOGIN or BREVO_SMTP_KEY env vars are not set!');
-    }
+    this.fromAddress = `INTERLUDE <${user}>`;
 
     this.transporter = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
-      secure: false,
+      service: 'gmail',
       auth: { user, pass },
     });
 
-    this.logger.log(`📧 Email service ready via Brevo SMTP (${user || 'NOT CONFIGURED'})`);
+    this.logger.log(`📧 Email service ready via Gmail SMTP (${user})`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
@@ -51,13 +47,17 @@ export class EmailService {
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
     this.logger.log(`🔑 Sending OTP ${code} to ${email}`);
-    await this.transporter.sendMail({
-      from: this.fromAddress,
-      to: email,
-      subject: `Your INTERLUDE Security Code: ${code}`,
-      html: this.buildTwoFactorEmailHtml(username, code),
-    });
-    this.logger.log(`✅ OTP email sent to ${email}`);
+    try {
+      await this.transporter.sendMail({
+        from: this.fromAddress,
+        to: email,
+        subject: `Your INTERLUDE Security Code: ${code}`,
+        html: this.buildTwoFactorEmailHtml(username, code),
+      });
+      this.logger.log(`✅ OTP email sent to ${email}`);
+    } catch (err: unknown) {
+      this.logger.error(`⚠️ OTP email delivery error for ${email}: ${(err as Error)?.message}`);
+    }
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
