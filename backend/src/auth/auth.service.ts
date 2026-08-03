@@ -94,17 +94,7 @@ export class AuthService {
 
   // ── 2FA Helper ────────────────────────────────────────────────
   private generateMixed2FACode(): string {
-    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-    const numbers = '23456789';
-    let code = '';
-    // Ensure both letters AND numbers are mixed (e.g., 3 letters + 3 numbers)
-    for (let i = 0; i < 3; i++) {
-      code += letters.charAt(Math.floor(Math.random() * letters.length));
-    }
-    for (let i = 0; i < 3; i++) {
-      code += numbers.charAt(Math.floor(Math.random() * numbers.length));
-    }
-    return code.split('').sort(() => Math.random() - 0.5).join('');
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   // ── Register ────────────────────────────────────────────────

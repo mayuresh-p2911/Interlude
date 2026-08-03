@@ -60,17 +60,28 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    this.logger.log(`🔑 Sending OTP ${code} to ${email}`);
+    this.logger.log(`🔑 [INTERLUDE OTP] Code for ${email} is: ${code}`);
+
+    const mailOptions = {
+      from: 'interlude209@gmail.com',
+      to: email,
+      subject: 'Verify your INTERLUDE Account',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; text-align: center;">
+          <h2>INTERLUDE Verification</h2>
+          <p>Welcome, ${username || 'User'}!</p>
+          <p>Please use the following 6-digit code to complete your verification:</p>
+          <h1 style="color: #3B82F6; letter-spacing: 5px;">${code}</h1>
+          <p>This code expires in 10 minutes.</p>
+        </div>
+      `,
+    };
+
     try {
-      await this.transporter.sendMail({
-        from: this.fromAddress,
-        to: email,
-        subject: `Your INTERLUDE Security Code: ${code}`,
-        html: this.buildTwoFactorEmailHtml(username, code),
-      });
-      this.logger.log(`✅ OTP email sent to ${email}`);
-    } catch (err: unknown) {
-      this.logger.error(`⚠️ OTP email delivery error for ${email}: ${(err as Error)?.message}`);
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
+    } catch (mailErr: any) {
+      this.logger.error(`⚠️ [INTERLUDE OTP SMTP NOTICE] Could not deliver email to ${email}:`, mailErr?.message || mailErr);
     }
   }
 
