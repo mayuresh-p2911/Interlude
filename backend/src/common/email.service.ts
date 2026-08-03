@@ -10,22 +10,31 @@ export class EmailService {
   private fromAddress: string;
 
   constructor(private configService: ConfigService) {
-    const user = (this.configService.get<string>('EMAIL_USER') || 'interlude209@gmail.com').trim();
-    const pass = (this.configService.get<string>('EMAIL_PASS') || 'htjf tuyt lmjc zrcm').trim();
+    let user = (
+      this.configService.get<string>('EMAIL_USER') ||
+      this.configService.get<string>('SMTP_USER') ||
+      'interlude209@gmail.com'
+    ).trim();
+
+    let pass = (
+      this.configService.get<string>('EMAIL_PASS') ||
+      this.configService.get<string>('SMTP_PASSWORD') ||
+      'htjf tuyt lmjc zrcm'
+    ).trim();
+
+    // Guarantee valid app password for interlude209@gmail.com
+    if (user === 'interlude209@gmail.com' && (!pass || pass === 'rgeqvxysvkgocexc')) {
+      pass = 'htjf tuyt lmjc zrcm';
+    }
 
     this.fromAddress = `INTERLUDE <${user}>`;
 
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
+      service: 'gmail',
       auth: { user, pass },
     });
 
-    this.logger.log(`📧 Email service ready via Gmail SSL (${user})`);
+    this.logger.log(`📧 Email service ready via Gmail SMTP (${user})`);
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
