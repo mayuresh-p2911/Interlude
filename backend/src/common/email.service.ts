@@ -23,15 +23,13 @@ export class EmailService {
       this.logger.log('📧 Email service running in console mode (no SMTP host configured)');
     } else if (host.includes('gmail')) {
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        service: 'gmail',
         auth: {
           user,
           pass,
         },
       });
-      this.logger.log(`📧 Email service connected to Gmail SMTP SSL (${user})`);
+      this.logger.log(`📧 Email service connected to Gmail service transport (${user})`);
     } else {
       this.transporter = nodemailer.createTransport({
         host,
