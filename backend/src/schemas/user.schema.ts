@@ -73,6 +73,12 @@ export class User {
   @Prop({ type: Date, default: null, select: false })
   twoFactorExpiry: Date | null;
 
+  @Prop({ type: Number, default: 0, select: false })
+  otpAttempts: number;
+
+  @Prop({ type: Date, default: null, select: false })
+  lastOtpSentAt: Date | null;
+
   @Prop({ type: Date, default: null })
   lastSeen: Date | null;
 }
