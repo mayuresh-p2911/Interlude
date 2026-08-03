@@ -34,6 +34,9 @@ export class EmailService {
       port: 465,
       secure: true,
       auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     this.logger.log(`📧 Email service ready via Gmail SSL 465 (${user})`);
@@ -62,29 +65,14 @@ export class EmailService {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-
-    const mailOptions = {
+    await this.transporter.sendMail({
       from: 'INTERLUDE <interlude209@gmail.com>',
       to: email,
       subject: `Your INTERLUDE Security Code: ${code}`,
       text: `Welcome, ${username || 'User'}! Your INTERLUDE verification code is: ${code}. This code expires in 10 minutes.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; text-align: center;">
-          <h2>INTERLUDE Verification</h2>
-          <p>Welcome, ${username || 'User'}!</p>
-          <p>Please use the following 6-digit code to complete your verification:</p>
-          <h1 style="color: #3B82F6; letter-spacing: 5px;">${code}</h1>
-          <p>This code expires in 10 minutes.</p>
-        </div>
-      `,
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
-    } catch (mailErr: any) {
-      this.logger.error(`⚠️ [INTERLUDE OTP SMTP NOTICE] Could not deliver email to ${email}:`, mailErr?.message || mailErr);
-    }
+      html: this.buildTwoFactorEmailHtml(username, code),
+    });
+    this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
   }
 
   async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {

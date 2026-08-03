@@ -19,6 +19,30 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { EmailService } from '../common/email.service';
 
+// Shape carried inside the REGISTER_2FA tempToken
+interface RegisterPayload {
+  sub: 'pending';
+  email: string;
+  username: string;
+  hashedPassword: string;
+  age: number;
+  hashedOtp: string;
+  otpExpiry: number; // Unix ms
+  lastOtpSentAt: number; // Unix ms
+  otpAttempts: number;
+  type: 'REGISTER_2FA';
+}
+
+// Shape carried inside the LOGIN_2FA tempToken
+interface LoginPayload {
+  sub: string; // existing user _id
+  email: string;
+  rememberMe: boolean;
+  type: 'LOGIN_2FA';
+}
+
+type TwoFAPayload = RegisterPayload | LoginPayload;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -39,7 +63,6 @@ export class AuthService {
     const all = uppercase + lowercase + numbers;
 
     let code = '';
-    // Ensure 1 uppercase, 1 lowercase, 1 number, plus 2 randoms (5 total)
     code += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
     code += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
     code += numbers.charAt(Math.floor(Math.random() * numbers.length));
@@ -98,97 +121,44 @@ export class AuthService {
   }
 
   // ── Register ────────────────────────────────────────────────
+  //
+  // No permanent User or Settings record is created here.
+  // All pending registration data is encoded inside the signed JWT
+  // (REGISTER_2FA tempToken). The actual user is created only after
+  // successful OTP verification inside verifyTwoFactor().
   async register(dto: RegisterDto) {
     await this.verifyCaptcha(dto.captchaToken, dto.captchaInput);
 
     const existingUser = await this.userModel.findOne({
       $or: [{ email: dto.email.toLowerCase() }, { username: dto.username }],
-    }).select('+lastOtpSentAt');
-
-    const otp = this.generateMixed2FACode();
-    const twoFactorCode = await bcrypt.hash(otp, 10);
-    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
-    const now = new Date();
-
-    if (existingUser) {
-      if (existingUser.isVerified) {
-        throw new ConflictException(
-          existingUser.email === dto.email.toLowerCase()
-            ? 'Email already registered'
-            : 'Username already taken',
-        );
-      }
-
-      // Enforce resend cooldown
-      if (
-        existingUser.lastOtpSentAt &&
-        now.getTime() - existingUser.lastOtpSentAt.getTime() < 60_000
-      ) {
-        throw new BadRequestException(
-          'Please wait 60 seconds before requesting another verification code.',
-        );
-      }
-
-      // If user exists but is NOT verified yet, update their pending registration
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
-      existingUser.username = dto.username;
-      existingUser.email = dto.email.toLowerCase();
-      existingUser.password = hashedPassword;
-      existingUser.age = dto.age;
-      existingUser.twoFactorCode = twoFactorCode;
-      existingUser.twoFactorExpiry = twoFactorExpiry;
-      existingUser.lastOtpSentAt = now;
-      existingUser.otpAttempts = 0;
-
-      await existingUser.save();
-
-      const tempToken = await this.jwtService.signAsync(
-        { sub: existingUser._id.toString(), email: existingUser.email, type: 'REGISTER_2FA' },
-        {
-          secret: this.configService.get<string>('JWT_SECRET'),
-          expiresIn: '10m',
-        },
-      );
-
-      try {
-        await this.emailService.sendTwoFactorCodeEmail(existingUser.email, existingUser.username, otp);
-      } catch (error) {
-        throw new BadRequestException(
-          'Unable to send the verification code. Please try again.',
-        );
-      }
-
-      return {
-        requires2FA: true,
-        tempToken,
-        email: existingUser.email,
-      };
-    }
-
-    // Check new user cooldown (not applicable for first-time registration, but included for consistency)
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const verificationToken = uuidv4();
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    const user = await this.userModel.create({
-      username: dto.username,
-      email: dto.email.toLowerCase(),
-      age: dto.age,
-      password: hashedPassword,
-      isVerified: false,
-      emailVerificationToken: verificationToken,
-      emailVerificationExpiry: verificationExpiry,
-      twoFactorCode,
-      twoFactorExpiry,
-      lastOtpSentAt: now,
-      otpAttempts: 0,
     });
 
-    // Create default settings
-    await this.settingsModel.create({ userId: user._id });
+    if (existingUser?.isVerified) {
+      throw new ConflictException(
+        existingUser.email === dto.email.toLowerCase()
+          ? 'Email already registered'
+          : 'Username already taken',
+      );
+    }
+
+    const now = Date.now();
+    const otp = this.generateMixed2FACode();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const tempToken = await this.jwtService.signAsync(
-      { sub: user._id.toString(), email: user.email, type: 'REGISTER_2FA' },
+      {
+        sub: 'pending',
+        email: dto.email.toLowerCase(),
+        username: dto.username,
+        hashedPassword,
+        age: dto.age,
+        hashedOtp,
+        otpExpiry: now + 10 * 60 * 1000,
+        lastOtpSentAt: now,
+        otpAttempts: 0,
+        type: 'REGISTER_2FA',
+      } satisfies RegisterPayload,
       {
         secret: this.configService.get<string>('JWT_SECRET'),
         expiresIn: '10m',
@@ -196,7 +166,7 @@ export class AuthService {
     );
 
     try {
-      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, otp);
+      await this.emailService.sendTwoFactorCodeEmail(dto.email.toLowerCase(), dto.username, otp);
     } catch (error) {
       throw new BadRequestException(
         'Unable to send the verification code. Please try again.',
@@ -206,7 +176,7 @@ export class AuthService {
     return {
       requires2FA: true,
       tempToken,
-      email: user.email,
+      email: dto.email.toLowerCase(),
     };
   }
 
@@ -260,7 +230,12 @@ export class AuthService {
     });
 
     const tempToken = await this.jwtService.signAsync(
-      { sub: user._id.toString(), email: user.email, rememberMe: !!dto.rememberMe, type: 'LOGIN_2FA' },
+      {
+        sub: user._id.toString(),
+        email: user.email,
+        rememberMe: !!dto.rememberMe,
+        type: 'LOGIN_2FA',
+      } satisfies LoginPayload,
       {
         secret: this.configService.get<string>('JWT_SECRET'),
         expiresIn: '10m',
@@ -284,15 +259,12 @@ export class AuthService {
 
   // ── Verify 2FA ────────────────────────────────────────────────
   async verifyTwoFactor(tempToken: string, code: string) {
-    let payload: { sub: string; email: string; rememberMe?: boolean; type: string };
+    let payload: TwoFAPayload;
     try {
-      payload = await this.jwtService.verifyAsync(tempToken, {
+      payload = await this.jwtService.verifyAsync<TwoFAPayload>(tempToken, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
-      if (
-        (payload.type !== 'REGISTER_2FA' && payload.type !== 'LOGIN_2FA') ||
-        !payload.sub
-      ) {
+      if (payload.type !== 'REGISTER_2FA' && payload.type !== 'LOGIN_2FA') {
         throw new UnauthorizedException('Invalid 2FA session');
       }
     } catch (err: unknown) {
@@ -300,8 +272,110 @@ export class AuthService {
       throw new UnauthorizedException('2FA session expired or invalid. Please sign in again.');
     }
 
+    // ── REGISTER path ─────────────────────────────────────────
+    if (payload.type === 'REGISTER_2FA') {
+      const reg = payload as RegisterPayload;
+
+      if (Date.now() > reg.otpExpiry) {
+        throw new BadRequestException('Invalid or expired 2FA code');
+      }
+
+      const codeMatch = await bcrypt.compare(code.trim(), reg.hashedOtp);
+
+      if (!codeMatch) {
+        const newAttempts = reg.otpAttempts + 1;
+
+        if (newAttempts >= 5) {
+          throw new BadRequestException(
+            'Too many incorrect attempts. A new verification code is required.',
+          );
+        }
+
+        // Re-issue token with incremented attempt counter so the state is preserved
+        const updatedToken = await this.jwtService.signAsync(
+          { ...reg, otpAttempts: newAttempts } satisfies RegisterPayload,
+          {
+            secret: this.configService.get<string>('JWT_SECRET'),
+            expiresIn: '10m',
+          },
+        );
+
+        throw new BadRequestException(
+          JSON.stringify({ message: 'Invalid or expired 2FA code', tempToken: updatedToken }),
+        );
+      }
+
+      // OTP is correct — check if this email/username was registered while we waited
+      const conflict = await this.userModel.findOne({
+        $or: [{ email: reg.email }, { username: reg.username }],
+      });
+
+      if (conflict?.isVerified) {
+        throw new ConflictException(
+          conflict.email === reg.email
+            ? 'Email already registered'
+            : 'Username already taken',
+        );
+      }
+
+      const verificationToken = uuidv4();
+      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Create the permanent user record now, after OTP verification
+      let user: UserDocument;
+      if (conflict && !conflict.isVerified) {
+        // Overwrite the existing unverified stub
+        conflict.username = reg.username;
+        conflict.email = reg.email;
+        conflict.password = reg.hashedPassword;
+        conflict.age = reg.age;
+        conflict.isVerified = true;
+        conflict.onlineStatus = 'online';
+        conflict.twoFactorCode = null;
+        conflict.twoFactorExpiry = null;
+        conflict.otpAttempts = 0;
+        conflict.lastOtpSentAt = null;
+        conflict.emailVerificationToken = verificationToken;
+        conflict.emailVerificationExpiry = verificationExpiry;
+        await conflict.save();
+        user = conflict;
+      } else {
+        user = await this.userModel.create({
+          username: reg.username,
+          email: reg.email,
+          age: reg.age,
+          password: reg.hashedPassword,
+          isVerified: true,
+          onlineStatus: 'online',
+          twoFactorCode: null,
+          twoFactorExpiry: null,
+          otpAttempts: 0,
+          lastOtpSentAt: null,
+          emailVerificationToken: verificationToken,
+          emailVerificationExpiry: verificationExpiry,
+        });
+
+        await this.settingsModel.create({ userId: user._id });
+      }
+
+      const tokens = await this.generateTokens(user);
+      const hashedRefresh = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+      await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedRefresh });
+
+      const updatedUser = await this.userModel.findById(user._id);
+
+      return {
+        user: this.sanitizeUser(updatedUser!),
+        tokens,
+        rememberMe: false,
+      };
+    }
+
+    // ── LOGIN path ────────────────────────────────────────────
+    const login = payload as LoginPayload;
+
     const user = await this.userModel
-      .findById(payload.sub)
+      .findById(login.sub)
       .select('+twoFactorCode +twoFactorExpiry +refreshToken +otpAttempts');
 
     if (!user) {
@@ -332,44 +406,34 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired 2FA code');
     }
 
-    // OTP verified — build update based on token type
-    const updatePayload: Record<string, unknown> = {
+    await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode: null,
       twoFactorExpiry: null,
       otpAttempts: 0,
       onlineStatus: 'online',
-    };
-
-    if (payload.type === 'REGISTER_2FA') {
-      updatePayload.isVerified = true;
-    }
-
-    await this.userModel.findByIdAndUpdate(user._id, updatePayload);
+    });
 
     const tokens = await this.generateTokens(user);
-    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
-    await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedToken });
+    const hashedRefresh = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+    await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedRefresh });
 
     const updatedUser = await this.userModel.findById(user._id);
 
     return {
       user: this.sanitizeUser(updatedUser!),
       tokens,
-      rememberMe: payload.rememberMe,
+      rememberMe: login.rememberMe,
     };
   }
 
   // ── Resend 2FA ────────────────────────────────────────────────
   async resendTwoFactor(tempToken: string) {
-    let payload: { sub: string; email: string; type: string };
+    let payload: TwoFAPayload;
     try {
-      payload = await this.jwtService.verifyAsync(tempToken, {
+      payload = await this.jwtService.verifyAsync<TwoFAPayload>(tempToken, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
-      if (
-        (payload.type !== 'REGISTER_2FA' && payload.type !== 'LOGIN_2FA') ||
-        !payload.sub
-      ) {
+      if (payload.type !== 'REGISTER_2FA' && payload.type !== 'LOGIN_2FA') {
         throw new UnauthorizedException('Invalid 2FA session');
       }
     } catch (err: unknown) {
@@ -377,16 +441,57 @@ export class AuthService {
       throw new UnauthorizedException('2FA session expired. Please sign in again.');
     }
 
-    const user = await this.userModel.findById(payload.sub).select('+lastOtpSentAt');
+    const now = Date.now();
+
+    // ── REGISTER resend path ──────────────────────────────────
+    if (payload.type === 'REGISTER_2FA') {
+      const reg = payload as RegisterPayload;
+
+      if (reg.lastOtpSentAt && now - reg.lastOtpSentAt < 60_000) {
+        throw new BadRequestException(
+          'Please wait 60 seconds before requesting another verification code.',
+        );
+      }
+
+      const otp = this.generateMixed2FACode();
+      const hashedOtp = await bcrypt.hash(otp, 10);
+
+      const newToken = await this.jwtService.signAsync(
+        {
+          ...reg,
+          hashedOtp,
+          otpExpiry: now + 10 * 60 * 1000,
+          lastOtpSentAt: now,
+          otpAttempts: 0,
+        } satisfies RegisterPayload,
+        {
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '10m',
+        },
+      );
+
+      try {
+        await this.emailService.sendTwoFactorCodeEmail(reg.email, reg.username, otp);
+      } catch (error) {
+        throw new BadRequestException(
+          'Unable to send the verification code. Please try again.',
+        );
+      }
+
+      return { message: 'A new 2FA code has been sent to your email.', tempToken: newToken };
+    }
+
+    // ── LOGIN resend path ─────────────────────────────────────
+    const login = payload as LoginPayload;
+
+    const user = await this.userModel.findById(login.sub).select('+lastOtpSentAt');
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const now = new Date();
-
     if (
       user.lastOtpSentAt &&
-      now.getTime() - user.lastOtpSentAt.getTime() < 60_000
+      now - user.lastOtpSentAt.getTime() < 60_000
     ) {
       throw new BadRequestException(
         'Please wait 60 seconds before requesting another verification code.',
@@ -395,13 +500,13 @@ export class AuthService {
 
     const otp = this.generateMixed2FACode();
     const twoFactorCode = await bcrypt.hash(otp, 10);
-    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const twoFactorExpiry = new Date(now + 10 * 60 * 1000);
 
     // Update DB before sending email — DB must always contain the OTP that was emailed
     await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode,
       twoFactorExpiry,
-      lastOtpSentAt: now,
+      lastOtpSentAt: new Date(now),
       otpAttempts: 0,
     });
 
@@ -469,7 +574,7 @@ export class AuthService {
 
     await this.emailService
       .sendPasswordResetEmail(user.email, user.username, resetToken)
-      .catch((err: unknown) => console.error('Failed to send password reset email:', err));
+      .catch((err: unknown) => this.logger.error('Failed to send password reset email', err));
 
     return { message: 'If that email exists, a reset link has been sent' };
   }
@@ -548,11 +653,6 @@ export class AuthService {
     ]);
 
     return { accessToken, refreshToken };
-  }
-
-  private async updateRefreshToken(userId: string, refreshToken: string) {
-    const hashedToken = await bcrypt.hash(refreshToken, 10);
-    await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
   }
 
   private sanitizeUser(user: UserDocument) {
