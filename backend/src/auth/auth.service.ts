@@ -112,11 +112,67 @@ export class AuthService {
       $or: [{ email: dto.email.toLowerCase() }, { username: dto.username }],
     });
 
+    const twoFactorCode = this.generateMixed2FACode();
+    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
     if (existingUser) {
-      throw new ConflictException(
-        existingUser.email === dto.email.toLowerCase()
-          ? 'Email already registered'
-          : 'Username already taken',
+      if (existingUser.isVerified) {
+        throw new ConflictException(
+          existingUser.email === dto.email.toLowerCase()
+            ? 'Email already registered'
+            : 'Username already taken',
+        );
+      }
+
+      // If user exists but is NOT verified yet, update their pending registration
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      existingUser.username = dto.username;
+      existingUser.email = dto.email.toLowerCase();
+      existingUser.password = hashedPassword;
+      existingUser.age = dto.age;
+      existingUser.twoFactorCode = twoFactorCode;
+      existingUser.twoFactorExpiry = twoFactorExpiry;
+
+      // MUST await email sending
+      try {
+        await this.emailService.sendTwoFactorCodeEmail(
+          existingUser.email,
+          existingUser.username,
+          twoFactorCode,
+        );
+      } catch (err: unknown) {
+        throw new BadRequestException(
+          `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify your email configuration.`,
+        );
+      }
+
+      await existingUser.save();
+
+      const tempToken = await this.jwtService.signAsync(
+        { sub: existingUser._id.toString(), email: existingUser.email, type: '2FA' },
+        {
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '10m',
+        },
+      );
+
+      return {
+        requires2FA: true,
+        tempToken,
+        email: existingUser.email,
+      };
+    }
+
+    // Attempt sending OTP email BEFORE creating new user record in DB
+    try {
+      await this.emailService.sendTwoFactorCodeEmail(
+        dto.email.toLowerCase(),
+        dto.username,
+        twoFactorCode,
+      );
+    } catch (err: unknown) {
+      throw new BadRequestException(
+        `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify email address and SMTP settings.`,
       );
     }
 
@@ -124,14 +180,12 @@ export class AuthService {
     const verificationToken = uuidv4();
     const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const twoFactorCode = this.generateMixed2FACode();
-    const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
     const user = await this.userModel.create({
       username: dto.username,
       email: dto.email.toLowerCase(),
       age: dto.age,
       password: hashedPassword,
+      isVerified: false,
       emailVerificationToken: verificationToken,
       emailVerificationExpiry: verificationExpiry,
       twoFactorCode,
@@ -140,11 +194,6 @@ export class AuthService {
 
     // Create default settings
     await this.settingsModel.create({ userId: user._id });
-
-    // Send initial verification & 2FA email
-    this.emailService
-      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
-      .catch((err: unknown) => console.error('Failed to send 2FA email:', err));
 
     const tempToken = await this.jwtService.signAsync(
       { sub: user._id.toString(), email: user.email, type: '2FA' },
@@ -185,14 +234,18 @@ export class AuthService {
     const twoFactorCode = this.generateMixed2FACode();
     const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
+    try {
+      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
+    } catch (err: unknown) {
+      throw new BadRequestException(
+        `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify email configuration.`,
+      );
+    }
+
     await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode,
       twoFactorExpiry,
     });
-
-    this.emailService
-      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
-      .catch((err: unknown) => console.error('Failed to send 2FA email:', err));
 
     const tempToken = await this.jwtService.signAsync(
       { sub: user._id.toString(), email: user.email, rememberMe: !!dto.rememberMe, type: '2FA' },
@@ -240,10 +293,11 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired 2FA code');
     }
 
-    // Clear 2FA code and mark online
+    // Clear 2FA code, set isVerified: true, and mark online
     await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode: null,
       twoFactorExpiry: null,
+      isVerified: true,
       onlineStatus: 'online',
     });
 
@@ -280,12 +334,18 @@ export class AuthService {
     const twoFactorCode = this.generateMixed2FACode();
     const twoFactorExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
+    try {
+      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
+    } catch (err: unknown) {
+      throw new BadRequestException(
+        `Failed to send OTP email: ${(err as Error)?.message || 'SMTP error'}. Please verify email configuration.`,
+      );
+    }
+
     await this.userModel.findByIdAndUpdate(user._id, {
       twoFactorCode,
       twoFactorExpiry,
     });
-
-    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     return { message: 'A new 2FA code has been sent to your email.' };
   }

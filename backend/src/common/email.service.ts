@@ -23,13 +23,15 @@ export class EmailService {
       this.logger.log('📧 Email service running in console mode (no SMTP host configured)');
     } else if (host.includes('gmail')) {
       this.transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: {
           user,
           pass,
         },
       });
-      this.logger.log(`📧 Email service connected to Gmail SMTP (${user})`);
+      this.logger.log(`📧 Email service connected to Gmail SMTP SSL (${user})`);
     } else {
       this.transporter = nodemailer.createTransport({
         host,
@@ -110,7 +112,9 @@ export class EmailService {
     try {
       const info = await this.transporter.sendMail(options);
       if (this.isDev) {
-        this.logger.log(`\n========================================\n📧 Email Sent (Dev Console Mode):\nTo: ${options.to as string}\nSubject: ${options.subject as string}\n========================================\n`);
+        this.logger.log(
+          `\n========================================\n📧 Email Sent:\nTo: ${options.to as string}\nSubject: ${options.subject as string}\n========================================\n`,
+        );
       }
       return info;
     } catch (error) {
@@ -209,4 +213,3 @@ export class EmailService {
     `;
   }
 }
-
