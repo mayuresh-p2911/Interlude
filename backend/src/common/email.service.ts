@@ -11,12 +11,11 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     const user = configService.get<string>('SMTP_USER') || 'interlude209@gmail.com';
     const pass = configService.get<string>('SMTP_PASSWORD') || 'rgeqvxysvkgocexc';
-    const host = configService.get<string>('SMTP_HOST') || 'smtp.gmail.com';
 
     this.transporter = nodemailer.createTransport({
-      host: host.includes('gmail') ? 'smtp.gmail.com' : host,
-      port: 465,
-      secure: true,
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // STARTTLS — required for Gmail app passwords on port 587
       auth: {
         user: user.trim(),
         pass: pass.trim().replace(/\s+/g, ''),
@@ -24,6 +23,9 @@ export class EmailService {
       tls: {
         rejectUnauthorized: false,
       },
+      connectionTimeout: 10000, // 10s — prevents indefinite hang
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     this.logger.log(`📧 Email service configured for SMTP user: ${user}`);

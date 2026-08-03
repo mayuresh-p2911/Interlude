@@ -133,13 +133,6 @@ export class AuthService {
       existingUser.twoFactorCode = twoFactorCode;
       existingUser.twoFactorExpiry = twoFactorExpiry;
 
-      // Dispatch 2FA email
-      await this.emailService.sendTwoFactorCodeEmail(
-        existingUser.email,
-        existingUser.username,
-        twoFactorCode,
-      );
-
       await existingUser.save();
 
       const tempToken = await this.jwtService.signAsync(
@@ -149,6 +142,13 @@ export class AuthService {
           expiresIn: '10m',
         },
       );
+
+      // Send OTP email in background — do not block the response
+      void this.emailService
+        .sendTwoFactorCodeEmail(existingUser.email, existingUser.username, twoFactorCode)
+        .catch((err: unknown) =>
+          this.logger.error(`Failed to send OTP email to ${existingUser.email}: ${(err as Error)?.message}`),
+        );
 
       return {
         requires2FA: true,
@@ -176,9 +176,6 @@ export class AuthService {
     // Create default settings
     await this.settingsModel.create({ userId: user._id });
 
-    // Dispatch 2FA email
-    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
-
     const tempToken = await this.jwtService.signAsync(
       { sub: user._id.toString(), email: user.email, type: '2FA' },
       {
@@ -186,6 +183,13 @@ export class AuthService {
         expiresIn: '10m',
       },
     );
+
+    // Send OTP email in background — do not block the response
+    void this.emailService
+      .sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode)
+      .catch((err: unknown) =>
+        this.logger.error(`Failed to send OTP email to ${user.email}: ${(err as Error)?.message}`),
+      );
 
     return {
       requires2FA: true,
