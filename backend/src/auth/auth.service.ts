@@ -136,7 +136,7 @@ export class AuthService {
         },
       );
 
-      await this.emailService.sendTwoFactorCodeEmail(existingUser.email, existingUser.username, twoFactorCode);
+      void this.emailService.sendTwoFactorCodeEmail(existingUser.email, existingUser.username, twoFactorCode);
 
       return {
         requires2FA: true,
@@ -172,7 +172,7 @@ export class AuthService {
       },
     );
 
-    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
+    void this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     return {
       requires2FA: true,
@@ -210,7 +210,7 @@ export class AuthService {
       twoFactorExpiry,
     });
 
-    await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
+    void this.emailService.sendTwoFactorCodeEmail(user.email, user.username, twoFactorCode);
 
     const tempToken = await this.jwtService.signAsync(
       { sub: user._id.toString(), email: user.email, rememberMe: !!dto.rememberMe, type: '2FA' },
