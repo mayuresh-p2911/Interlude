@@ -6,12 +6,17 @@ import axios from 'axios';
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly apiKey: string;
-  private readonly fromEmail = 'interlude209@gmail.com';
+  // Brevo login = the FROM address Brevo can actually authenticate (passes SPF/DKIM)
+  private readonly fromEmail = 'b440c5001@smtp-brevo.com';
   private readonly fromName = 'Interlude';
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('BREVO_API_KEY') ?? '';
-    this.logger.log(`📧 Email service configured via Brevo HTTP API`);
+    if (!this.apiKey) {
+      this.logger.error('❌ BREVO_API_KEY is not set — OTP emails will NOT be sent!');
+    } else {
+      this.logger.log(`📧 Email service ready via Brevo HTTP API`);
+    }
   }
 
   private async sendBrevoEmail(to: string, subject: string, html: string) {
