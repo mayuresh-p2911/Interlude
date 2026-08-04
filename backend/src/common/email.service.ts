@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import * as https from 'https';
 
 @Injectable()
 export class EmailService implements OnModuleDestroy {
@@ -210,25 +211,27 @@ export class EmailService implements OnModuleDestroy {
 
     if (resendApiKey) {
       try {
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
+        const fromEmail = (this.fromAddress.includes('resend.dev') || this.fromAddress.includes('interlude.app'))
+          ? 'onboarding@resend.dev'
+          : this.fromAddress;
+
+        const res = await this.postHttps(
+          'https://api.resend.com/emails',
+          {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${resendApiKey}`,
           },
-          body: JSON.stringify({
-            from: this.fromAddress.includes('onboarding@resend.dev') || !this.fromAddress.includes('interlude.app')
-              ? (this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`)
-              : 'INTERLUDE <onboarding@resend.dev>',
+          {
+            from: fromEmail,
             to: options.to,
             subject: options.subject,
             html: options.html,
             text: options.text,
-          }),
-        });
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Resend API returned status ${response.status}: ${errText}`);
+          },
+        );
+
+        if (res.status < 200 || res.status >= 300) {
+          throw new Error(`Resend API returned status ${res.status}: ${res.data}`);
         }
         this.logger.log(`✉️ Email sent via Resend API to ${options.to}`);
         return;
@@ -239,28 +242,26 @@ export class EmailService implements OnModuleDestroy {
 
     if (sendgridApiKey) {
       try {
-        const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-          method: 'POST',
-          headers: {
+        const fromEmail = this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress;
+        const res = await this.postHttps(
+          'https://api.sendgrid.com/v3/mail/send',
+          {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${sendgridApiKey}`,
           },
-          body: JSON.stringify({
+          {
             personalizations: [{ to: [{ email: options.to }] }],
-            from: {
-              email: this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress,
-              name: 'INTERLUDE',
-            },
+            from: { email: fromEmail, name: 'INTERLUDE' },
             subject: options.subject,
             content: [
               { type: 'text/html', value: options.html },
               ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
             ],
-          }),
-        });
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`SendGrid API returned status ${response.status}: ${errText}`);
+          },
+        );
+
+        if (res.status < 200 || res.status >= 300) {
+          throw new Error(`SendGrid API returned status ${res.status}: ${res.data}`);
         }
         this.logger.log(`✉️ Email sent via SendGrid API to ${options.to}`);
         return;
@@ -286,6 +287,50 @@ export class EmailService implements OnModuleDestroy {
       );
       throw error;
     }
+  }
+
+  private postHttps(
+    url: string,
+    headers: Record<string, string>,
+    body: any,
+  ): Promise<{ status: number; data: string }> {
+    return new Promise((resolve, reject) => {
+      const parsedUrl = new URL(url);
+      const reqData = JSON.stringify(body);
+
+      const req = https.request(
+        {
+          hostname: parsedUrl.hostname,
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Length': Buffer.byteLength(reqData),
+          },
+          timeout: 10_000,
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 200, data });
+          });
+        },
+      );
+
+      req.on('error', (err) => {
+        reject(err);
+      });
+
+      req.on('timeout', () => {
+        req.destroy(new Error('HTTPS request timed out'));
+      });
+
+      req.write(reqData);
+      req.end();
+    });
   }
 
   private sendWithTimeout(
