@@ -139,107 +139,9 @@ export class EmailService implements OnModuleDestroy {
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 15_000,
   ) {
-    const brevoApiKey =
-      this.configService.get<string>('BREVO_API_KEY')?.trim() ||
-      this.configService.get<string>('SENDINBLUE_API_KEY')?.trim();
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
-    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
-
-    // 1. Try Brevo HTTPS API (port 443 - works on Render, sends from interlude209@gmail.com to any recipient)
-    if (brevoApiKey) {
-      try {
-        const res = await this.postHttps(
-          'https://api.brevo.com/v3/smtp/email',
-          {
-            'Content-Type': 'application/json',
-            'api-key': brevoApiKey,
-          },
-          {
-            sender: { name: 'INTERLUDE', email: 'interlude209@gmail.com' },
-            to: [{ email: options.to }],
-            subject: options.subject,
-            htmlContent: options.html,
-            textContent: options.text,
-          },
-        );
-
-        if (res.status >= 200 && res.status < 300) {
-          this.logger.log(`✉️ OTP Email sent via Brevo HTTPS API to ${options.to}`);
-          return;
-        }
-        this.logger.warn(`Brevo HTTPS API status ${res.status}: ${res.data}`);
-      } catch (err) {
-        this.logger.warn(`Brevo HTTPS API error: ${(err as Error).message}`);
-      }
-    }
-
-    // 2. Try Resend HTTPS API (port 443 - works on Render)
-    if (resendApiKey) {
-      try {
-        const fromEmail = (this.fromAddress.includes('resend.dev') || this.fromAddress.includes('interlude.app'))
-          ? 'onboarding@resend.dev'
-          : this.fromAddress;
-
-        const res = await this.postHttps(
-          'https://api.resend.com/emails',
-          {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resendApiKey}`,
-          },
-          {
-            from: fromEmail,
-            to: options.to,
-            subject: options.subject,
-            html: options.html,
-            text: options.text,
-          },
-        );
-
-        if (res.status >= 200 && res.status < 300) {
-          this.logger.log(`✉️ OTP Email sent via Resend HTTPS API to ${options.to}`);
-          return;
-        }
-        this.logger.warn(`Resend HTTPS API status ${res.status}: ${res.data}`);
-      } catch (err) {
-        this.logger.warn(`Resend HTTPS API error: ${(err as Error).message}`);
-      }
-    }
-
-    // 3. Try SendGrid HTTPS API (port 443 - works on Render)
-    if (sendgridApiKey) {
-      try {
-        const fromEmail = this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress;
-        const res = await this.postHttps(
-          'https://api.sendgrid.com/v3/mail/send',
-          {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sendgridApiKey}`,
-          },
-          {
-            personalizations: [{ to: [{ email: options.to }] }],
-            from: { email: fromEmail, name: 'INTERLUDE' },
-            subject: options.subject,
-            content: [
-              { type: 'text/html', value: options.html },
-              ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
-            ],
-          },
-        );
-
-        if (res.status >= 200 && res.status < 300) {
-          this.logger.log(`✉️ OTP Email sent via SendGrid HTTPS API to ${options.to}`);
-          return;
-        }
-        this.logger.warn(`SendGrid HTTPS API status ${res.status}: ${res.data}`);
-      } catch (err) {
-        this.logger.warn(`SendGrid HTTPS API error: ${(err as Error).message}`);
-      }
-    }
-
-    // 4. Try Nodemailer SMTP (works on local machine; blocked by Render host firewall on port 465)
     return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`SMTP timed out after ${timeoutMs}ms (Render blocks outbound TCP ports 25, 465, 587)`));
+        reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.transporter
@@ -258,51 +160,6 @@ export class EmailService implements OnModuleDestroy {
           clearTimeout(timer);
           reject(err);
         });
-    });
-  }
-
-  private postHttps(
-    url: string,
-    headers: Record<string, string>,
-    body: any,
-  ): Promise<{ status: number; data: string }> {
-    return new Promise((resolve, reject) => {
-      const https = require('https');
-      const parsedUrl = new URL(url);
-      const reqData = JSON.stringify(body);
-
-      const req = https.request(
-        {
-          hostname: parsedUrl.hostname,
-          path: parsedUrl.pathname + parsedUrl.search,
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Length': Buffer.byteLength(reqData),
-          },
-          timeout: 10_000,
-        },
-        (res: any) => {
-          let data = '';
-          res.on('data', (chunk: any) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            resolve({ status: res.statusCode ?? 200, data });
-          });
-        },
-      );
-
-      req.on('error', (err: any) => {
-        reject(err);
-      });
-
-      req.on('timeout', () => {
-        req.destroy(new Error('HTTPS request timed out'));
-      });
-
-      req.write(reqData);
-      req.end();
     });
   }
 
