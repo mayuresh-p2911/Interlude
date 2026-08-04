@@ -44,6 +44,7 @@ export class EmailService implements OnModuleDestroy {
           service: 'gmail',
           auth: { user: smtpUser, pass: smtpPass },
           tls: { rejectUnauthorized: false },
+          debug: true,
         }
       : {
           host: smtpHost,
@@ -51,6 +52,7 @@ export class EmailService implements OnModuleDestroy {
           secure: smtpPort === 465,
           auth: { user: smtpUser, pass: smtpPass },
           tls: { rejectUnauthorized: false },
+          debug: true,
         };
 
     this.transporter = nodemailer.createTransport({
@@ -90,7 +92,7 @@ export class EmailService implements OnModuleDestroy {
     this.logOtpToConsole(email, code);
 
     try {
-      await this.deliverMail(
+      const info = await this.deliverMail(
         {
           to: email,
           subject: `Your INTERLUDE Security Code: ${code}`,
@@ -99,6 +101,8 @@ export class EmailService implements OnModuleDestroy {
         },
         15_000,
       );
+      this.logger.log(`✉️ OTP email dispatched to ${email}: ${info.messageId}`);
+
       this.logger.log(`✉️ OTP email dispatched to ${email}`);
     } catch (error) {
       this.logger.warn(
