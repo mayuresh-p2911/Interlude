@@ -59,18 +59,7 @@ export class EmailService implements OnModuleDestroy {
       greetingTimeout: 10_000,
       socketTimeout: 20_000,
     });
-
-    void this.transporter
-      .verify()
-      .then(() => {
-        const targetStr = isGmail ? 'Gmail Service (SSL)' : `${smtpHost}:${smtpPort}`;
-        this.logger.log(`📧 Email service SMTP ready (${targetStr} as ${smtpUser})`);
-      })
-      .catch((err: unknown) => {
-        this.logger.warn(
-          `📧 Email SMTP verify note: Outbound SMTP ports blocked on this host (${(err as Error)?.message ?? String(err)}). HTTPS API / Console logging active.`,
-        );
-      });
+    this.logger.log(`📧 Email service initialized (${isGmail ? 'Gmail' : smtpHost})`);
   }
 
   onModuleDestroy() {
