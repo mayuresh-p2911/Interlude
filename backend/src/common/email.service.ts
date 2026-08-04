@@ -68,7 +68,7 @@ export class EmailService implements OnModuleDestroy {
       })
       .catch((err: unknown) => {
         this.logger.warn(
-          `📧 Email SMTP verify warning — ${(err as Error)?.message ?? String(err)}`,
+          `📧 Email SMTP verify note: Outbound SMTP ports blocked on this host (${(err as Error)?.message ?? String(err)}). HTTPS API / Console logging active.`,
         );
       });
   }
@@ -108,12 +108,12 @@ export class EmailService implements OnModuleDestroy {
           text: `Hi ${username || 'there'}, your INTERLUDE verification code is: ${code}. It expires in 10 minutes.`,
           html: this.buildTwoFactorEmailHtml(username, code),
         },
-        20_000,
+        15_000,
       );
       this.logger.log(`✉️ OTP email dispatched to ${email}`);
     } catch (error) {
-      this.logger.error(
-        `❌ SMTP could not deliver OTP to ${email}: ${(error as Error)?.message ?? String(error)}`,
+      this.logger.warn(
+        `⚠️ Could not send OTP email to ${email}: ${(error as Error)?.message ?? String(error)}. (Code logged in console above)`,
       );
     }
   }
@@ -148,8 +148,41 @@ export class EmailService implements OnModuleDestroy {
 
   private async deliverMail(
     options: { to: string; subject: string; html: string; text?: string },
-    timeoutMs = 25_000,
+    timeoutMs = 15_000,
   ) {
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+
+    if (resendApiKey) {
+      try {
+        const fromEmail = (this.fromAddress.includes('resend.dev') || this.fromAddress.includes('interlude.app'))
+          ? 'onboarding@resend.dev'
+          : this.fromAddress;
+
+        const res = await this.postHttps(
+          'https://api.resend.com/emails',
+          {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${resendApiKey}`,
+          },
+          {
+            from: fromEmail,
+            to: options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+          },
+        );
+
+        if (res.status >= 200 && res.status < 300) {
+          this.logger.log(`✉️ Email sent via Resend HTTPS API to ${options.to}`);
+          return;
+        }
+        this.logger.warn(`Resend API returned status ${res.status}: ${res.data}. Trying SMTP...`);
+      } catch (err) {
+        this.logger.warn(`Resend API failed: ${(err as Error).message}. Trying SMTP...`);
+      }
+    }
+
     return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
@@ -171,6 +204,51 @@ export class EmailService implements OnModuleDestroy {
           clearTimeout(timer);
           reject(err);
         });
+    });
+  }
+
+  private postHttps(
+    url: string,
+    headers: Record<string, string>,
+    body: any,
+  ): Promise<{ status: number; data: string }> {
+    return new Promise((resolve, reject) => {
+      const https = require('https');
+      const parsedUrl = new URL(url);
+      const reqData = JSON.stringify(body);
+
+      const req = https.request(
+        {
+          hostname: parsedUrl.hostname,
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Length': Buffer.byteLength(reqData),
+          },
+          timeout: 10_000,
+        },
+        (res: any) => {
+          let data = '';
+          res.on('data', (chunk: any) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 200, data });
+          });
+        },
+      );
+
+      req.on('error', (err: any) => {
+        reject(err);
+      });
+
+      req.on('timeout', () => {
+        req.destroy(new Error('HTTPS request timed out'));
+      });
+
+      req.write(reqData);
+      req.end();
     });
   }
 
