@@ -35,9 +35,14 @@ export class EmailService implements OnModuleDestroy {
     const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
     const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
 
+    // Ensure the fromAddress aligns with the SMTP user if using Gmail or fallback credentials to prevent SMTP rejection.
+    const isUsingFallback = smtpUser === 'interlude209@gmail.com';
+    const isGmail = smtpService === 'gmail' || smtpUser.toLowerCase().endsWith('@gmail.com');
+
     this.fromAddress =
-      this.configService.get<string>('EMAIL_FROM')?.trim() ||
-      (smtpUser ? `INTERLUDE <${smtpUser}>` : 'INTERLUDE <noreply@interlude.app>');
+      isUsingFallback || isGmail
+        ? `INTERLUDE <${smtpUser}>`
+        : this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
 
     if (!smtpService && (!smtpHost || !smtpUser || !smtpPass)) {
       this.consoleOnly = true;
