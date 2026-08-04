@@ -1,39 +1,8 @@
-import * as dns from 'dns';
-
-// Monkey-patch dns.resolveSrv to use an independent fallback resolver if the system resolver fails (Windows SRV bug)
-// This preserves the default system DNS settings globally, avoiding any SMTP/network timeouts.
-const originalResolveSrv = dns.resolveSrv;
-(dns as any).resolveSrv = function (
-  name: string,
-  callback: (err: NodeJS.ErrnoException | null, addresses: dns.SrvRecord[]) => void,
-) {
-  originalResolveSrv(name, (err, addresses) => {
-    if (err && (err.code === 'ECONNREFUSED' || err.code === 'ESERVFAIL' || err.code === 'EREFUSED' || err.code === 'ENOTFOUND')) {
-      const fallbackResolver = new dns.Resolver();
-      try {
-        fallbackResolver.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-        fallbackResolver.resolveSrv(name, (fallbackErr, fallbackAddresses) => {
-          if (fallbackErr) {
-            callback(fallbackErr, []);
-          } else {
-            callback(null, fallbackAddresses);
-          }
-        });
-      } catch (dnsErr) {
-        callback(err, []);
-      }
-    } else {
-      callback(err, addresses);
-    }
-  });
-};
-
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
-
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -63,6 +32,7 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+
       if (
         configuredOrigins.includes(origin) ||
         origin.endsWith('.vercel.app') ||
@@ -71,11 +41,17 @@ async function bootstrap() {
       ) {
         return callback(null, true);
       }
+
       return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Cookie',
+      'X-Requested-With',
+    ],
   });
 
   app.use(cookieParser());
@@ -89,7 +65,9 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: { enableImplicitConversion: true },
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
@@ -108,9 +86,11 @@ async function bootstrap() {
   }
 
   const port = process.env.PORT ?? 4000;
+
   await app.listen(port);
-  console.log(`\n🎬 INTERLUDE Backend running on http://localhost:${port}/api`);
-  console.log(`📚 Swagger Docs: http://localhost:${port}/api/docs\n`);
+
+  console.log(`🎬 INTERLUDE Backend running on http://localhost:${port}/api`);
+  console.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
