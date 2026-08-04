@@ -1,46 +1,4 @@
-import * as dns from 'dns';
-import * as fs from 'fs';
-import * as path from 'path';
 
-// Fix for Node.js SRV DNS resolution failing on Windows (querySrv ECONNREFUSED).
-// Only override DNS servers if we encounter an SRV lookup error, to avoid blocking DNS on restricted networks.
-try {
-  let mongoUri = process.env.MONGODB_URI;
-  if (!mongoUri) {
-    const envPaths = [
-      path.resolve(process.cwd(), '.env'),
-      path.resolve(process.cwd(), '../.env'),
-    ];
-    for (const envPath of envPaths) {
-      if (fs.existsSync(envPath)) {
-        const envContent = fs.readFileSync(envPath, 'utf8');
-        const match = envContent.match(/^MONGODB_URI\s*=\s*(.+)$/m);
-        if (match) {
-          mongoUri = match[1].trim().replace(/['"]/g, '');
-          break;
-        }
-      }
-    }
-  }
-
-  if (mongoUri && mongoUri.startsWith('mongodb+srv://')) {
-    const hostPart = mongoUri.split('@')[1]?.split('/')[0]?.split('?')[0];
-    if (hostPart) {
-      dns.resolveSrv(`_mongodb._tcp.${hostPart}`, (err) => {
-        if (err && (err.code === 'ECONNREFUSED' || err.code === 'ESERVFAIL' || err.code === 'EREFUSED')) {
-          console.warn(`[DNS] SRV lookup failed for ${hostPart} (${err.code}). Applying Google/Cloudflare DNS fallback...`);
-          try {
-            dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-          } catch (dnsErr) {
-            console.error('[DNS] Failed to set custom DNS servers:', dnsErr);
-          }
-        }
-      });
-    }
-  }
-} catch (err) {
-  // Ignore filesystem or parsing errors
-}
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
