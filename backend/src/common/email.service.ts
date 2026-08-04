@@ -17,19 +17,19 @@ export class EmailService implements OnModuleDestroy {
     const smtpUser = (
       this.configService.get<string>('EMAIL_USER') ||
       this.configService.get<string>('SMTP_USER') ||
-      ''
+      'interlude209@gmail.com'
     ).trim();
 
     const smtpPass = (
       this.configService.get<string>('EMAIL_PASS') ||
       this.configService.get<string>('SMTP_PASSWORD') ||
-      ''
+      'htjf tuyt lmjc zrcm'
     ).trim();
 
     const smtpService = (
       this.configService.get<string>('SMTP_SERVICE') ||
       this.configService.get<string>('EMAIL_SERVICE') ||
-      ''
+      (smtpUser.toLowerCase().endsWith('@gmail.com') ? 'gmail' : '')
     ).trim();
 
     const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
