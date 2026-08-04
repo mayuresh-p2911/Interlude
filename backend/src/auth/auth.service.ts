@@ -120,6 +120,15 @@ export class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  /** Sends OTP email without blocking the HTTP response (register/login must stay fast). */
+  private queueOtpEmail(email: string, username: string, otp: string) {
+    void this.emailService.sendTwoFactorCodeEmail(email, username, otp).catch((err: unknown) => {
+      this.logger.error(
+        `Background OTP email failed for ${email}: ${(err as Error)?.message ?? String(err)}`,
+      );
+    });
+  }
+
   // ── Register ────────────────────────────────────────────────
   //
   // No permanent User or Settings record is created here.
@@ -165,13 +174,7 @@ export class AuthService {
       },
     );
 
-    try {
-      await this.emailService.sendTwoFactorCodeEmail(dto.email.toLowerCase(), dto.username, otp);
-    } catch (error) {
-      throw new BadRequestException(
-        'Unable to send the verification code. Please try again.',
-      );
-    }
+    this.queueOtpEmail(dto.email.toLowerCase(), dto.username, otp);
 
     return {
       requires2FA: true,
@@ -242,13 +245,7 @@ export class AuthService {
       },
     );
 
-    try {
-      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, otp);
-    } catch (error) {
-      throw new BadRequestException(
-        'Unable to send the verification code. Please try again.',
-      );
-    }
+    this.queueOtpEmail(user.email, user.username, otp);
 
     return {
       requires2FA: true,
@@ -470,13 +467,13 @@ export class AuthService {
         },
       );
 
-      try {
-        await this.emailService.sendTwoFactorCodeEmail(reg.email, reg.username, otp);
-      } catch (error) {
-        throw new BadRequestException(
-          'Unable to send the verification code. Please try again.',
-        );
-      }
+      void this.emailService
+        .sendTwoFactorCodeEmail(reg.email, reg.username, otp)
+        .catch((err: unknown) => {
+          this.logger.error(
+            `Resend OTP failed for ${reg.email}: ${(err as Error)?.message ?? String(err)}`,
+          );
+        });
 
       return { message: 'A new 2FA code has been sent to your email.', tempToken: newToken };
     }
@@ -510,13 +507,13 @@ export class AuthService {
       otpAttempts: 0,
     });
 
-    try {
-      await this.emailService.sendTwoFactorCodeEmail(user.email, user.username, otp);
-    } catch (error) {
-      throw new BadRequestException(
-        'Unable to send the verification code. Please try again.',
-      );
-    }
+    void this.emailService
+      .sendTwoFactorCodeEmail(user.email, user.username, otp)
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Resend OTP failed for ${user.email}: ${(err as Error)?.message ?? String(err)}`,
+        );
+      });
 
     return { message: 'A new 2FA code has been sent to your email.' };
   }

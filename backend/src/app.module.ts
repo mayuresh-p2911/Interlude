@@ -21,7 +21,7 @@ import { GatewaysModule } from './gateways/gateways.module';
     // ── Config ──────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../.env', 'backend/.env'],
+      envFilePath: ['.env'],
     }),
 
     // ── Database ─────────────────────────────────────────────
@@ -29,6 +29,7 @@ import { GatewaysModule } from './gateways/gateways.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
+        serverSelectionTimeoutMS: 5000,
       }),
       inject: [ConfigService],
     }),

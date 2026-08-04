@@ -8,60 +8,95 @@ export class EmailService implements OnModuleDestroy {
   private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
   private fromAddress: string;
+  private readonly consoleOnly: boolean;
+  private readonly isDev: boolean;
 
   constructor(private configService: ConfigService) {
-    let user = (
+    this.isDev = this.configService.get<string>('NODE_ENV') !== 'production';
+
+    const smtpUser = (
       this.configService.get<string>('EMAIL_USER') ||
       this.configService.get<string>('SMTP_USER') ||
-      'interlude209@gmail.com'
+      ''
     ).trim();
 
-    let pass = (
+    const smtpPass = (
       this.configService.get<string>('EMAIL_PASS') ||
       this.configService.get<string>('SMTP_PASSWORD') ||
-      'htjf tuyt lmjc zrcm'
+      ''
     ).trim();
 
-    // Guarantee valid app password for interlude209@gmail.com
-    if (user === 'interlude209@gmail.com' && (!pass || pass === 'rgeqvxysvkgocexc')) {
-      pass = 'htjf tuyt lmjc zrcm';
+    const smtpService = (
+      this.configService.get<string>('SMTP_SERVICE') ||
+      this.configService.get<string>('EMAIL_SERVICE') ||
+      ''
+    ).trim();
+
+    const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
+    const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
+
+    this.fromAddress =
+      this.configService.get<string>('EMAIL_FROM')?.trim() ||
+      (smtpUser ? `INTERLUDE <${smtpUser}>` : 'INTERLUDE <noreply@interlude.app>');
+
+    if (!smtpService && (!smtpHost || !smtpUser || !smtpPass)) {
+      this.consoleOnly = true;
+      this.transporter = nodemailer.createTransport({ jsonTransport: true });
+      this.logger.warn(
+        '📧 Email: SMTP not configured (set EMAIL_USER + EMAIL_PASS or SMTP_*). OTP codes are logged in this terminal only.',
+      );
+      return;
     }
 
-    this.fromAddress = `INTERLUDE <${user}>`;
+    this.consoleOnly = false;
+    const smtpPort = this.configService.get<number>('SMTP_PORT') ?? 587;
+    const secure =
+      this.configService.get<string>('SMTP_SECURE') === 'true' || smtpPort === 465;
 
-    // Connection pool: one persistent connection, reused for all sends.
-    // Pre-warming at startup means individual sends complete in ~1-2s
-    // instead of the 20-30s required to establish a new SSL connection each time.
+    const transportConfig: any = smtpService
+      ? { service: smtpService }
+      : {
+          host: smtpHost,
+          port: smtpPort,
+          secure,
+          ...(smtpPort === 587 && !secure
+            ? { requireTLS: true, tls: { minVersion: 'TLSv1.2' } }
+            : {}),
+        };
+
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-      pool: true,
-      maxConnections: 1,
-      maxMessages: Infinity,
-      connectionTimeout: 60000,
-      greetingTimeout: 60000,
-      socketTimeout: 120000,
+      ...transportConfig,
+      auth: { user: smtpUser, pass: smtpPass },
+      // Connection pooling disabled to prevent connection drop hangs on long-idle states
+      pool: false,
+      connectionTimeout: 15_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
 
-    // Pre-warm the pool connection at startup so the first send is fast.
-    this.transporter.verify().then(() => {
-      this.logger.log(`📧 Email service ready — SMTP pool connection established (${user})`);
-    }).catch((err: unknown) => {
-      this.logger.warn(`📧 Email service: SMTP pool pre-warm failed — will retry on first send. ${(err as Error)?.message ?? String(err)}`);
-    });
+    void this.transporter
+      .verify()
+      .then(() => {
+        const infoStr = smtpService ? `service: ${smtpService}` : `${smtpHost}:${smtpPort}`;
+        this.logger.log(`📧 Email service ready (${infoStr} as ${smtpUser})`);
+      })
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `📧 Email SMTP verify failed — sends will retry. ${(err as Error)?.message ?? String(err)}`,
+        );
+      });
   }
 
   onModuleDestroy() {
-    this.transporter.close();
+    if (!this.consoleOnly) {
+      this.transporter.close();
+    }
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
-    await this.transporter.sendMail({
-      from: this.fromAddress,
+    await this.deliverMail({
       to: email,
       subject: 'Verify your INTERLUDE account',
       html: this.buildVerificationEmailHtml(username, verificationUrl),
@@ -71,8 +106,7 @@ export class EmailService implements OnModuleDestroy {
   async sendPasswordResetEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
-    await this.transporter.sendMail({
-      from: this.fromAddress,
+    await this.deliverMail({
       to: email,
       subject: 'Reset your INTERLUDE password',
       html: this.buildPasswordResetEmailHtml(username, resetUrl),
@@ -80,26 +114,45 @@ export class EmailService implements OnModuleDestroy {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
+    if (this.isDev) {
+      this.logOtpToConsole(email, code);
+    }
+
+    if (this.consoleOnly) {
+      return;
+    }
+
     try {
-      await this.transporter.sendMail({
-        from: 'INTERLUDE <interlude209@gmail.com>',
-        to: email,
-        subject: `Your INTERLUDE Security Code: ${code}`,
-        text: `Welcome, ${username || 'User'}! Your INTERLUDE verification code is: ${code}. This code expires in 10 minutes.`,
-        html: this.buildTwoFactorEmailHtml(username, code),
-      });
-      this.logger.log(`✉️ [INTERLUDE OTP] Successfully emailed OTP code to ${email}`);
-    } catch (err: unknown) {
-      this.logger.error(`❌ [INTERLUDE OTP] SMTP failure for ${email}: ${(err as Error)?.message ?? String(err)}`);
-      throw err;
+      await this.deliverMail(
+        {
+          to: email,
+          subject: `Your INTERLUDE Security Code: ${code}`,
+          text: `Hi ${username || 'there'}, your INTERLUDE verification code is: ${code}. It expires in 10 minutes.`,
+          html: this.buildTwoFactorEmailHtml(username, code),
+        },
+        20_000,
+      );
+      this.logger.log(`✉️ OTP email dispatched to ${email}`);
+    } catch (error) {
+      if (this.isDev) {
+        this.logger.warn(
+          `SMTP could not deliver OTP to ${email} in development — use the code printed in this terminal.`,
+        );
+        return;
+      }
+      throw error;
     }
   }
 
-  async sendWatchInviteEmail(email: string, fromUsername: string, movieTitle: string, sessionId: string) {
+  async sendWatchInviteEmail(
+    email: string,
+    fromUsername: string,
+    movieTitle: string,
+    sessionId: string,
+  ) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const sessionUrl = `${appUrl}/watch/${sessionId}`;
-    await this.transporter.sendMail({
-      from: this.fromAddress,
+    await this.deliverMail({
       to: email,
       subject: `${fromUsername} invited you to watch ${movieTitle} on INTERLUDE`,
       html: `<div style="background:#0A0A0A;color:#fff;padding:40px;font-family:sans-serif;">
@@ -107,6 +160,60 @@ export class EmailService implements OnModuleDestroy {
         <p><strong>${fromUsername}</strong> has invited you to watch <strong>${movieTitle}</strong> together.</p>
         <a href="${sessionUrl}" style="background:#2563EB;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px;">Join Watch Party</a>
       </div>`,
+    });
+  }
+
+  private logOtpToConsole(email: string, code: string) {
+    this.logger.log('');
+    this.logger.log('╔══════════════════════════════════════════════════╗');
+    this.logger.log(`║  INTERLUDE verification code for ${email}`);
+    this.logger.log(`║  CODE: ${code}`);
+    this.logger.log('╚══════════════════════════════════════════════════╝');
+    this.logger.log('');
+  }
+
+  private async deliverMail(
+    options: { to: string; subject: string; html: string; text?: string },
+    timeoutMs = 25_000,
+  ) {
+    try {
+      await this.sendWithTimeout(
+        {
+          from: this.fromAddress,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        },
+        timeoutMs,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send "${options.subject}" to ${options.to}: ${(error as Error)?.message ?? String(error)}`,
+      );
+      throw error;
+    }
+  }
+
+  private sendWithTimeout(
+    options: nodemailer.SendMailOptions,
+    timeoutMs: number,
+  ): Promise<nodemailer.SentMessageInfo> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.transporter
+        .sendMail(options)
+        .then((info) => {
+          clearTimeout(timer);
+          resolve(info);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
     });
   }
 
