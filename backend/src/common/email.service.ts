@@ -31,17 +31,18 @@ export class EmailService implements OnModuleDestroy {
     const secure =
       this.configService.get<string>('SMTP_SECURE') === 'true' || smtpPort === 465;
 
-    // Use built-in Gmail config only if the port is NOT 587 (since port 587 requires STARTTLS which is config-specific)
+    const isUsingFallback = smtpUser === 'interlude209@gmail.com';
+
+    // Use built-in Gmail config if using fallback credentials, or if it is Gmail and port is not 587
     const smtpService = (
       this.configService.get<string>('SMTP_SERVICE') ||
       this.configService.get<string>('EMAIL_SERVICE') ||
-      (smtpPort !== 587 && (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com')) ? 'gmail' : '')
+      (isUsingFallback || (smtpPort !== 587 && (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com'))) ? 'gmail' : '')
     ).trim();
 
     const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
 
     // Ensure the fromAddress aligns with the SMTP user if using Gmail or fallback credentials to prevent SMTP rejection.
-    const isUsingFallback = smtpUser === 'interlude209@gmail.com';
     const isGmail = smtpService === 'gmail' || smtpUser.toLowerCase().endsWith('@gmail.com');
 
     this.fromAddress =
