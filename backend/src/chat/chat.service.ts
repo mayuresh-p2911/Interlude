@@ -5,7 +5,7 @@ import { Message, MessageDocument } from '../schemas/message.schema';
 import { Settings, SettingsDocument } from '../schemas/settings.schema';
 import { Friendship, FriendshipDocument } from '../schemas/friendship.schema';
 import { UploadService } from '../common/upload.service';
-import * as sanitizeHtml from 'sanitize-html';
+import sanitizeHtml from 'sanitize-html';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
