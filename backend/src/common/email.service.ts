@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleDestroy {
   private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
   private fromAddress: string;
@@ -29,17 +29,32 @@ export class EmailService {
 
     this.fromAddress = `INTERLUDE <${user}>`;
 
+    // Connection pool: one persistent connection, reused for all sends.
+    // Pre-warming at startup means individual sends complete in ~1-2s
+    // instead of the 20-30s required to establish a new SSL connection each time.
     this.transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
       auth: { user, pass },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 60000,
+      pool: true,
+      maxConnections: 1,
+      maxMessages: Infinity,
+      connectionTimeout: 60000,
+      greetingTimeout: 60000,
+      socketTimeout: 120000,
     });
 
-    this.logger.log(`📧 Email service ready via Gmail SSL 465 (${user})`);
+    // Pre-warm the pool connection at startup so the first send is fast.
+    this.transporter.verify().then(() => {
+      this.logger.log(`📧 Email service ready — SMTP pool connection established (${user})`);
+    }).catch((err: unknown) => {
+      this.logger.warn(`📧 Email service: SMTP pool pre-warm failed — will retry on first send. ${(err as Error)?.message ?? String(err)}`);
+    });
+  }
+
+  onModuleDestroy() {
+    this.transporter.close();
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
