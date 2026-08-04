@@ -4,6 +4,20 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { BaseGateway, AuthSocket } from './base.gateway';
 
+// WebRTC signalling shapes — defined locally because RTCSessionDescriptionInit
+// and RTCIceCandidateInit are DOM types unavailable in the Node.js lib.
+interface RTCSessionDescriptionInit {
+  type: 'offer' | 'answer' | 'pranswer' | 'rollback';
+  sdp?: string;
+}
+
+interface RTCIceCandidateInit {
+  candidate?: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+}
+
 @WebSocketGateway({
   namespace: '/',
   cors: { origin: '*', credentials: true },
