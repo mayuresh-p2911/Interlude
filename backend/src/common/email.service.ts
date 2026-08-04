@@ -27,11 +27,15 @@ export class EmailService implements OnModuleDestroy {
     ).trim();
 
     const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
+    const smtpPort = this.configService.get<number>('SMTP_PORT') ?? 587;
+    const secure =
+      this.configService.get<string>('SMTP_SECURE') === 'true' || smtpPort === 465;
 
+    // Use built-in Gmail config only if the port is NOT 587 (since port 587 requires STARTTLS which is config-specific)
     const smtpService = (
       this.configService.get<string>('SMTP_SERVICE') ||
       this.configService.get<string>('EMAIL_SERVICE') ||
-      (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com') ? 'gmail' : '')
+      (smtpPort !== 587 && (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com')) ? 'gmail' : '')
     ).trim();
 
     const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
@@ -55,18 +59,21 @@ export class EmailService implements OnModuleDestroy {
     }
 
     this.consoleOnly = false;
-    const smtpPort = this.configService.get<number>('SMTP_PORT') ?? 587;
-    const secure =
-      this.configService.get<string>('SMTP_SECURE') === 'true' || smtpPort === 465;
+
+    // Reject unauthorized certs is disabled in dev to bypass local antivirus/proxy SSL inspection blocks
+    const tlsConfig = {
+      minVersion: 'TLSv1.2',
+      ...(this.isDev ? { rejectUnauthorized: false } : {}),
+    };
 
     const transportConfig: any = smtpService
-      ? { service: smtpService }
+      ? { service: smtpService, tls: tlsConfig }
       : {
           host: smtpHost,
           port: smtpPort,
           secure,
           ...(smtpPort === 587 && !secure
-            ? { requireTLS: true, tls: { minVersion: 'TLSv1.2' } }
+            ? { requireTLS: true, tls: tlsConfig }
             : {}),
         };
 
