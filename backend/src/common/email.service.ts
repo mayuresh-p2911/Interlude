@@ -30,20 +30,31 @@ export class EmailService implements OnModuleDestroy {
       'smtp.gmail.com'
     ).trim();
 
-    const smtpPort = Number(this.configService.get<number>('SMTP_PORT')) || 587;
-    const secure = smtpPort === 465;
+    const smtpPort = Number(this.configService.get<number>('SMTP_PORT')) || 465;
 
     this.fromAddress =
       this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
 
+    const isGmail =
+      smtpUser.toLowerCase().endsWith('@gmail.com') ||
+      smtpHost.toLowerCase().includes('gmail.com');
+
+    const transportConfig = isGmail
+      ? {
+          service: 'gmail',
+          auth: { user: smtpUser, pass: smtpPass },
+          tls: { rejectUnauthorized: false },
+        }
+      : {
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass },
+          tls: { rejectUnauthorized: false },
+        };
+
     this.transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure,
-      auth: { user: smtpUser, pass: smtpPass },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      ...transportConfig,
       connectionTimeout: 15_000,
       greetingTimeout: 10_000,
       socketTimeout: 20_000,
@@ -52,7 +63,8 @@ export class EmailService implements OnModuleDestroy {
     void this.transporter
       .verify()
       .then(() => {
-        this.logger.log(`📧 Email service SMTP ready (${smtpHost}:${smtpPort} as ${smtpUser})`);
+        const targetStr = isGmail ? 'Gmail Service (SSL)' : `${smtpHost}:${smtpPort}`;
+        this.logger.log(`📧 Email service SMTP ready (${targetStr} as ${smtpUser})`);
       })
       .catch((err: unknown) => {
         this.logger.warn(
