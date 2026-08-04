@@ -191,6 +191,68 @@ export class EmailService implements OnModuleDestroy {
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 25_000,
   ) {
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
+
+    if (resendApiKey) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${resendApiKey}`,
+          },
+          body: JSON.stringify({
+            from: this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`,
+            to: options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Resend API returned status ${response.status}: ${errText}`);
+        }
+        this.logger.log(`✉️ Email sent via Resend API to ${options.to}`);
+        return;
+      } catch (err) {
+        this.logger.error(`Resend API failed: ${(err as Error).message}`);
+      }
+    }
+
+    if (sendgridApiKey) {
+      try {
+        const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sendgridApiKey}`,
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: options.to }] }],
+            from: {
+              email: this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress,
+              name: 'INTERLUDE',
+            },
+            subject: options.subject,
+            content: [
+              { type: 'text/html', value: options.html },
+              ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
+            ],
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`SendGrid API returned status ${response.status}: ${errText}`);
+        }
+        this.logger.log(`✉️ Email sent via SendGrid API to ${options.to}`);
+        return;
+      } catch (err) {
+        this.logger.error(`SendGrid API failed: ${(err as Error).message}`);
+      }
+    }
+
     try {
       await this.sendWithTimeout(
         {
