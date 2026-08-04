@@ -1,4 +1,32 @@
+import * as dns from 'dns';
 
+// Monkey-patch dns.resolveSrv to use an independent fallback resolver if the system resolver fails (Windows SRV bug)
+// This preserves the default system DNS settings globally, avoiding any SMTP/network timeouts.
+const originalResolveSrv = dns.resolveSrv;
+(dns as any).resolveSrv = function (
+  name: string,
+  callback: (err: NodeJS.ErrnoException | null, addresses: dns.SrvRecord[]) => void,
+) {
+  originalResolveSrv(name, (err, addresses) => {
+    if (err && (err.code === 'ECONNREFUSED' || err.code === 'ESERVFAIL' || err.code === 'EREFUSED' || err.code === 'ENOTFOUND')) {
+      const fallbackResolver = new dns.Resolver();
+      try {
+        fallbackResolver.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+        fallbackResolver.resolveSrv(name, (fallbackErr, fallbackAddresses) => {
+          if (fallbackErr) {
+            callback(fallbackErr, []);
+          } else {
+            callback(null, fallbackAddresses);
+          }
+        });
+      } catch (dnsErr) {
+        callback(err, []);
+      }
+    } else {
+      callback(err, addresses);
+    }
+  });
+};
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
