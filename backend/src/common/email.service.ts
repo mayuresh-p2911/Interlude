@@ -26,13 +26,14 @@ export class EmailService implements OnModuleDestroy {
       'htjf tuyt lmjc zrcm'
     ).trim();
 
+    const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
+
     const smtpService = (
       this.configService.get<string>('SMTP_SERVICE') ||
       this.configService.get<string>('EMAIL_SERVICE') ||
-      (smtpUser.toLowerCase().endsWith('@gmail.com') ? 'gmail' : '')
+      (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com') ? 'gmail' : '')
     ).trim();
 
-    const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
     const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
 
     // Ensure the fromAddress aligns with the SMTP user if using Gmail or fallback credentials to prevent SMTP rejection.
@@ -139,10 +140,11 @@ export class EmailService implements OnModuleDestroy {
       );
       this.logger.log(`✉️ OTP email dispatched to ${email}`);
     } catch (error) {
+      this.logger.error(
+        `❌ SMTP could not deliver OTP to ${email}: ${(error as Error)?.message ?? String(error)}`,
+      );
+      this.logOtpToConsole(email, code);
       if (this.isDev) {
-        this.logger.warn(
-          `SMTP could not deliver OTP to ${email} in development — use the code printed in this terminal.`,
-        );
         return;
       }
       throw error;
