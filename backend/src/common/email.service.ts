@@ -2,102 +2,48 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
-import * as https from 'https';
 
 @Injectable()
 export class EmailService implements OnModuleDestroy {
   private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
   private fromAddress: string;
-  private readonly consoleOnly: boolean;
   private readonly isDev: boolean;
 
   constructor(private configService: ConfigService) {
     this.isDev = this.configService.get<string>('NODE_ENV') !== 'production';
 
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
-    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
-
-    if (resendApiKey || sendgridApiKey) {
-      this.consoleOnly = false;
-      this.fromAddress =
-        this.configService.get<string>('EMAIL_FROM')?.trim() || 'INTERLUDE <onboarding@resend.dev>';
-      this.transporter = nodemailer.createTransport({ jsonTransport: true });
-      this.logger.log(
-        `📧 Email service ready (API Mode: ${resendApiKey ? 'Resend' : 'SendGrid'})`,
-      );
-      return;
-    }
-
     const smtpUser = (
-      this.configService.get<string>('EMAIL_USER') ||
       this.configService.get<string>('SMTP_USER') ||
+      this.configService.get<string>('EMAIL_USER') ||
       'interlude209@gmail.com'
     ).trim();
 
     const smtpPass = (
-      this.configService.get<string>('EMAIL_PASS') ||
       this.configService.get<string>('SMTP_PASSWORD') ||
+      this.configService.get<string>('EMAIL_PASS') ||
       'htjf tuyt lmjc zrcm'
     ).trim();
 
-    const configuredHost = (this.configService.get<string>('SMTP_HOST') || '').trim();
-    const smtpPort = this.configService.get<number>('SMTP_PORT') ?? 587;
-    const secure =
-      this.configService.get<string>('SMTP_SECURE') === 'true' || smtpPort === 465;
-
-    const isUsingFallback = smtpUser === 'interlude209@gmail.com';
-
-    // Use built-in Gmail config if using fallback credentials, or if it is Gmail and port is not 587
-    const smtpService = (
-      this.configService.get<string>('SMTP_SERVICE') ||
-      this.configService.get<string>('EMAIL_SERVICE') ||
-      (isUsingFallback || (smtpPort !== 587 && (smtpUser.toLowerCase().endsWith('@gmail.com') || configuredHost.toLowerCase().includes('gmail.com'))) ? 'gmail' : '')
+    const smtpHost = (
+      this.configService.get<string>('SMTP_HOST') ||
+      'smtp.gmail.com'
     ).trim();
 
-    const smtpHost = configuredHost || (smtpUser && !smtpService ? 'smtp.gmail.com' : '');
-
-    // Ensure the fromAddress aligns with the SMTP user if using Gmail or fallback credentials to prevent SMTP rejection.
-    const isGmail = smtpService === 'gmail' || smtpUser.toLowerCase().endsWith('@gmail.com');
+    const smtpPort = Number(this.configService.get<number>('SMTP_PORT')) || 587;
+    const secure = smtpPort === 465;
 
     this.fromAddress =
-      isUsingFallback || isGmail
-        ? `INTERLUDE <${smtpUser}>`
-        : this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
-
-    if (!smtpService && (!smtpHost || !smtpUser || !smtpPass)) {
-      this.consoleOnly = true;
-      this.transporter = nodemailer.createTransport({ jsonTransport: true });
-      this.logger.warn(
-        '📧 Email: SMTP not configured (set EMAIL_USER + EMAIL_PASS or SMTP_*). OTP codes are logged in this terminal only.',
-      );
-      return;
-    }
-
-    this.consoleOnly = false;
-
-    // Reject unauthorized certs is disabled in dev to bypass local antivirus/proxy SSL inspection blocks
-    const tlsConfig = {
-      minVersion: 'TLSv1.2',
-      ...(this.isDev ? { rejectUnauthorized: false } : {}),
-    };
-
-    const transportConfig: any = smtpService
-      ? { service: smtpService, tls: tlsConfig }
-      : {
-          host: smtpHost,
-          port: smtpPort,
-          secure,
-          ...(smtpPort === 587 && !secure
-            ? { requireTLS: true, tls: tlsConfig }
-            : {}),
-        };
+      this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
 
     this.transporter = nodemailer.createTransport({
-      ...transportConfig,
+      host: smtpHost,
+      port: smtpPort,
+      secure,
       auth: { user: smtpUser, pass: smtpPass },
-      // Connection pooling disabled to prevent connection drop hangs on long-idle states
-      pool: false,
+      tls: {
+        rejectUnauthorized: false,
+      },
       connectionTimeout: 15_000,
       greetingTimeout: 10_000,
       socketTimeout: 20_000,
@@ -106,20 +52,17 @@ export class EmailService implements OnModuleDestroy {
     void this.transporter
       .verify()
       .then(() => {
-        const infoStr = smtpService ? `service: ${smtpService}` : `${smtpHost}:${smtpPort}`;
-        this.logger.log(`📧 Email service ready (${infoStr} as ${smtpUser})`);
+        this.logger.log(`📧 Email service SMTP ready (${smtpHost}:${smtpPort} as ${smtpUser})`);
       })
       .catch((err: unknown) => {
         this.logger.warn(
-          `📧 Email SMTP verify failed — sends will retry. ${(err as Error)?.message ?? String(err)}`,
+          `📧 Email SMTP verify warning — ${(err as Error)?.message ?? String(err)}`,
         );
       });
   }
 
   onModuleDestroy() {
-    if (!this.consoleOnly) {
-      this.transporter.close();
-    }
+    this.transporter.close();
   }
 
   async sendVerificationEmail(email: string, username: string, token: string) {
@@ -143,13 +86,7 @@ export class EmailService implements OnModuleDestroy {
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
-    if (this.isDev) {
-      this.logOtpToConsole(email, code);
-    }
-
-    if (this.consoleOnly) {
-      return;
-    }
+    this.logOtpToConsole(email, code);
 
     try {
       await this.deliverMail(
@@ -166,11 +103,6 @@ export class EmailService implements OnModuleDestroy {
       this.logger.error(
         `❌ SMTP could not deliver OTP to ${email}: ${(error as Error)?.message ?? String(error)}`,
       );
-      this.logOtpToConsole(email, code);
-      if (this.isDev) {
-        return;
-      }
-      throw error;
     }
   }
 
@@ -206,144 +138,19 @@ export class EmailService implements OnModuleDestroy {
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 25_000,
   ) {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
-    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
-
-    if (resendApiKey) {
-      try {
-        const fromEmail = (this.fromAddress.includes('resend.dev') || this.fromAddress.includes('interlude.app'))
-          ? 'onboarding@resend.dev'
-          : this.fromAddress;
-
-        const res = await this.postHttps(
-          'https://api.resend.com/emails',
-          {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resendApiKey}`,
-          },
-          {
-            from: fromEmail,
-            to: options.to,
-            subject: options.subject,
-            html: options.html,
-            text: options.text,
-          },
-        );
-
-        if (res.status < 200 || res.status >= 300) {
-          throw new Error(`Resend API returned status ${res.status}: ${res.data}`);
-        }
-        this.logger.log(`✉️ Email sent via Resend API to ${options.to}`);
-        return;
-      } catch (err) {
-        this.logger.error(`Resend API failed: ${(err as Error).message}`);
-      }
-    }
-
-    if (sendgridApiKey) {
-      try {
-        const fromEmail = this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress;
-        const res = await this.postHttps(
-          'https://api.sendgrid.com/v3/mail/send',
-          {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sendgridApiKey}`,
-          },
-          {
-            personalizations: [{ to: [{ email: options.to }] }],
-            from: { email: fromEmail, name: 'INTERLUDE' },
-            subject: options.subject,
-            content: [
-              { type: 'text/html', value: options.html },
-              ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
-            ],
-          },
-        );
-
-        if (res.status < 200 || res.status >= 300) {
-          throw new Error(`SendGrid API returned status ${res.status}: ${res.data}`);
-        }
-        this.logger.log(`✉️ Email sent via SendGrid API to ${options.to}`);
-        return;
-      } catch (err) {
-        this.logger.error(`SendGrid API failed: ${(err as Error).message}`);
-      }
-    }
-
-    try {
-      await this.sendWithTimeout(
-        {
-          from: this.fromAddress,
-          to: options.to,
-          subject: options.subject,
-          html: options.html,
-          text: options.text,
-        },
-        timeoutMs,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to send "${options.subject}" to ${options.to}: ${(error as Error)?.message ?? String(error)}`,
-      );
-      throw error;
-    }
-  }
-
-  private postHttps(
-    url: string,
-    headers: Record<string, string>,
-    body: any,
-  ): Promise<{ status: number; data: string }> {
-    return new Promise((resolve, reject) => {
-      const parsedUrl = new URL(url);
-      const reqData = JSON.stringify(body);
-
-      const req = https.request(
-        {
-          hostname: parsedUrl.hostname,
-          path: parsedUrl.pathname + parsedUrl.search,
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Length': Buffer.byteLength(reqData),
-          },
-          timeout: 10_000,
-        },
-        (res) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            resolve({ status: res.statusCode ?? 200, data });
-          });
-        },
-      );
-
-      req.on('error', (err) => {
-        reject(err);
-      });
-
-      req.on('timeout', () => {
-        req.destroy(new Error('HTTPS request timed out'));
-      });
-
-      req.write(reqData);
-      req.end();
-    });
-  }
-
-  private sendWithTimeout(
-    options: nodemailer.SendMailOptions,
-    timeoutMs: number,
-  ): Promise<nodemailer.SentMessageInfo> {
-    return new Promise((resolve, reject) => {
+    return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.transporter
-        .sendMail(options)
+        .sendMail({
+          from: this.fromAddress,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        })
         .then((info) => {
           clearTimeout(timer);
           resolve(info);
@@ -408,3 +215,4 @@ export class EmailService implements OnModuleDestroy {
       </div></body></html>`;
   }
 }
+

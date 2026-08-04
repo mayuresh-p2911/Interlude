@@ -297,9 +297,10 @@ export class AuthService {
           },
         );
 
-        throw new BadRequestException(
-          JSON.stringify({ message: 'Invalid or expired 2FA code', tempToken: updatedToken }),
-        );
+        throw new BadRequestException({
+          message: 'Invalid or expired 2FA code',
+          tempToken: updatedToken,
+        });
       }
 
       // OTP is correct — check if this email/username was registered while we waited
@@ -467,13 +468,7 @@ export class AuthService {
         },
       );
 
-      void this.emailService
-        .sendTwoFactorCodeEmail(reg.email, reg.username, otp)
-        .catch((err: unknown) => {
-          this.logger.error(
-            `Resend OTP failed for ${reg.email}: ${(err as Error)?.message ?? String(err)}`,
-          );
-        });
+      this.queueOtpEmail(reg.email, reg.username, otp);
 
       return { message: 'A new 2FA code has been sent to your email.', tempToken: newToken };
     }
@@ -507,13 +502,7 @@ export class AuthService {
       otpAttempts: 0,
     });
 
-    void this.emailService
-      .sendTwoFactorCodeEmail(user.email, user.username, otp)
-      .catch((err: unknown) => {
-        this.logger.error(
-          `Resend OTP failed for ${user.email}: ${(err as Error)?.message ?? String(err)}`,
-        );
-      });
+    this.queueOtpEmail(user.email, user.username, otp);
 
     return { message: 'A new 2FA code has been sent to your email.' };
   }

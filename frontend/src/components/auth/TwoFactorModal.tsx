@@ -24,10 +24,16 @@ export default function TwoFactorModal({
 }: TwoFactorModalProps) {
   const { verify2FA } = useAuthStore();
   const [code, setCode] = useState<string[]>(Array(6).fill(''));
+  const [currentTempToken, setCurrentTempToken] = useState(tempToken);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [isResending, setIsResending] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Keep currentTempToken in sync when tempToken prop changes
+  useEffect(() => {
+    setCurrentTempToken(tempToken);
+  }, [tempToken]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -89,13 +95,15 @@ export default function TwoFactorModal({
 
     setIsSubmitting(true);
     try {
-      await verify2FA(tempToken, finalCode);
+      await verify2FA(currentTempToken, finalCode);
       toast.success('Security code verified! Welcome back 🎬');
       onSuccess();
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Invalid or expired 2FA code';
+      const respData = (err as { response?: { data?: { message?: string; tempToken?: string } } })?.response?.data;
+      if (respData?.tempToken) {
+        setCurrentTempToken(respData.tempToken);
+      }
+      const message = respData?.message ?? 'Invalid or expired 2FA code';
       toast.error(message);
       setCode(Array(6).fill(''));
       inputRefs.current[0]?.focus();
@@ -108,7 +116,10 @@ export default function TwoFactorModal({
     if (resendCooldown > 0 || isResending) return;
     setIsResending(true);
     try {
-      await authApi.resend2FA({ tempToken });
+      const res = await authApi.resend2FA({ tempToken: currentTempToken });
+      if (res.data?.tempToken) {
+        setCurrentTempToken(res.data.tempToken);
+      }
       toast.success('A new 2FA code has been sent to your email');
       setResendCooldown(60);
       setCode(Array(6).fill(''));
