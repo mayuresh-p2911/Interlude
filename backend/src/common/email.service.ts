@@ -140,7 +140,71 @@ export class EmailService implements OnModuleDestroy {
     timeoutMs = 15_000,
   ) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+    const brevoApiKey =
+      this.configService.get<string>('BREVO_API_KEY')?.trim() ||
+      this.configService.get<string>('SENDINBLUE_API_KEY')?.trim();
+    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
 
+    // 1. Try Brevo HTTPS API (port 443 - no recipient restrictions, works on Render)
+    if (brevoApiKey) {
+      try {
+        const res = await this.postHttps(
+          'https://api.brevo.com/v3/smtp/email',
+          {
+            'Content-Type': 'application/json',
+            'api-key': brevoApiKey,
+          },
+          {
+            sender: { name: 'INTERLUDE', email: 'interlude209@gmail.com' },
+            to: [{ email: options.to }],
+            subject: options.subject,
+            htmlContent: options.html,
+            textContent: options.text,
+          },
+        );
+
+        if (res.status >= 200 && res.status < 300) {
+          this.logger.log(`✉️ Email sent via Brevo HTTPS API to ${options.to}`);
+          return;
+        }
+        this.logger.warn(`Brevo API status ${res.status}: ${res.data}`);
+      } catch (err) {
+        this.logger.warn(`Brevo API error: ${(err as Error).message}`);
+      }
+    }
+
+    // 2. Try SendGrid HTTPS API (port 443 - works on Render)
+    if (sendgridApiKey) {
+      try {
+        const fromEmail = this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress;
+        const res = await this.postHttps(
+          'https://api.sendgrid.com/v3/mail/send',
+          {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sendgridApiKey}`,
+          },
+          {
+            personalizations: [{ to: [{ email: options.to }] }],
+            from: { email: fromEmail, name: 'INTERLUDE' },
+            subject: options.subject,
+            content: [
+              { type: 'text/html', value: options.html },
+              ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
+            ],
+          },
+        );
+
+        if (res.status >= 200 && res.status < 300) {
+          this.logger.log(`✉️ Email sent via SendGrid HTTPS API to ${options.to}`);
+          return;
+        }
+        this.logger.warn(`SendGrid API status ${res.status}: ${res.data}`);
+      } catch (err) {
+        this.logger.warn(`SendGrid API error: ${(err as Error).message}`);
+      }
+    }
+
+    // 3. Try Resend HTTPS API (port 443 - works on Render)
     if (resendApiKey) {
       try {
         const fromEmail = (this.fromAddress.includes('resend.dev') || this.fromAddress.includes('interlude.app'))
@@ -166,15 +230,22 @@ export class EmailService implements OnModuleDestroy {
           this.logger.log(`✉️ Email sent via Resend HTTPS API to ${options.to}`);
           return;
         }
-        this.logger.warn(`Resend API returned status ${res.status}: ${res.data}. Trying SMTP...`);
+        if (res.status === 403 && res.data.includes('testing emails')) {
+          this.logger.warn(
+            `⚠️ Resend testing domain (onboarding@resend.dev) restricts delivery to account owner only. To send to ${options.to}, verify a domain on resend.com/domains or set BREVO_API_KEY.`,
+          );
+        } else {
+          this.logger.warn(`Resend API status ${res.status}: ${res.data}`);
+        }
       } catch (err) {
-        this.logger.warn(`Resend API failed: ${(err as Error).message}. Trying SMTP...`);
+        this.logger.warn(`Resend API error: ${(err as Error).message}`);
       }
     }
 
+    // 4. Fallback to Nodemailer SMTP (works on local machine; blocked by host firewall on Render)
     return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
+        reject(new Error(`SMTP timed out after ${timeoutMs}ms (Outbound SMTP ports blocked on cloud host)`));
       }, timeoutMs);
 
       this.transporter
