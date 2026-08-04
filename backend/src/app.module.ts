@@ -21,7 +21,7 @@ import { GatewaysModule } from './gateways/gateways.module';
     // ── Config ──────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env'],
+      envFilePath: ['.env', '../.env'],
     }),
 
     // ── Database ─────────────────────────────────────────────

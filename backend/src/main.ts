@@ -7,12 +7,18 @@ import * as path from 'path';
 try {
   let mongoUri = process.env.MONGODB_URI;
   if (!mongoUri) {
-    const envPath = path.resolve(process.cwd(), '.env');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      const match = envContent.match(/^MONGODB_URI\s*=\s*(.+)$/m);
-      if (match) {
-        mongoUri = match[1].trim().replace(/['"]/g, '');
+    const envPaths = [
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(process.cwd(), '../.env'),
+    ];
+    for (const envPath of envPaths) {
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const match = envContent.match(/^MONGODB_URI\s*=\s*(.+)$/m);
+        if (match) {
+          mongoUri = match[1].trim().replace(/['"]/g, '');
+          break;
+        }
       }
     }
   }
