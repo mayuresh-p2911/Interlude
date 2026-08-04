@@ -14,6 +14,20 @@ export class EmailService implements OnModuleDestroy {
   constructor(private configService: ConfigService) {
     this.isDev = this.configService.get<string>('NODE_ENV') !== 'production';
 
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+    const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
+
+    if (resendApiKey || sendgridApiKey) {
+      this.consoleOnly = false;
+      this.fromAddress =
+        this.configService.get<string>('EMAIL_FROM')?.trim() || 'INTERLUDE <onboarding@resend.dev>';
+      this.transporter = nodemailer.createTransport({ jsonTransport: true });
+      this.logger.log(
+        `📧 Email service ready (API Mode: ${resendApiKey ? 'Resend' : 'SendGrid'})`,
+      );
+      return;
+    }
+
     const smtpUser = (
       this.configService.get<string>('EMAIL_USER') ||
       this.configService.get<string>('SMTP_USER') ||
