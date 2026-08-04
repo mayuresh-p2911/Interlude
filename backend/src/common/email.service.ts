@@ -203,7 +203,9 @@ export class EmailService implements OnModuleDestroy {
             Authorization: `Bearer ${resendApiKey}`,
           },
           body: JSON.stringify({
-            from: this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`,
+            from: this.fromAddress.includes('onboarding@resend.dev') || !this.fromAddress.includes('interlude.app')
+              ? (this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`)
+              : 'INTERLUDE <onboarding@resend.dev>',
             to: options.to,
             subject: options.subject,
             html: options.html,
