@@ -1,7 +1,5 @@
 import * as dns from 'dns';
 
-// Monkey-patch dns.resolveSrv to use an independent fallback resolver if the system resolver fails (Windows SRV bug)
-// This preserves the default system DNS settings globally, avoiding any SMTP/network timeouts.
 const originalResolveSrv = dns.resolveSrv;
 (dns as any).resolveSrv = function (
   name: string,

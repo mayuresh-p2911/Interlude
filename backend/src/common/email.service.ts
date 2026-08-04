@@ -17,16 +17,14 @@ export class EmailService implements OnModuleDestroy {
 
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
     const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
-    const brevoApiKey = this.configService.get<string>('BREVO_API_KEY')?.trim();
 
-    if (resendApiKey || sendgridApiKey || brevoApiKey) {
+    if (resendApiKey || sendgridApiKey) {
       this.consoleOnly = false;
       this.fromAddress =
         this.configService.get<string>('EMAIL_FROM')?.trim() || 'INTERLUDE <onboarding@resend.dev>';
       this.transporter = nodemailer.createTransport({ jsonTransport: true });
-      const apiMode = resendApiKey ? 'Resend' : sendgridApiKey ? 'SendGrid' : 'Brevo';
       this.logger.log(
-        `📧 Email service ready (API Mode: ${apiMode})`,
+        `📧 Email service ready (API Mode: ${resendApiKey ? 'Resend' : 'SendGrid'})`,
       );
       return;
     }
@@ -210,35 +208,6 @@ export class EmailService implements OnModuleDestroy {
   ) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
     const sendgridApiKey = this.configService.get<string>('SENDGRID_API_KEY')?.trim();
-    const brevoApiKey = this.configService.get<string>('BREVO_API_KEY')?.trim();
-
-    if (brevoApiKey) {
-      try {
-        const fromEmail = this.fromAddress.match(/<([^>]+)>/)?.[1] || this.fromAddress;
-        const res = await this.postHttps(
-          'https://api.brevo.com/v3/smtp/email',
-          {
-            accept: 'application/json',
-            'content-type': 'application/json',
-            'api-key': brevoApiKey,
-          },
-          {
-            sender: { name: 'INTERLUDE', email: fromEmail },
-            to: [{ email: options.to }],
-            subject: options.subject,
-            htmlContent: options.html,
-          },
-        );
-
-        if (res.status < 200 || res.status >= 300) {
-          throw new Error(`Brevo API returned status ${res.status}: ${res.data}`);
-        }
-        this.logger.log(`✉️ Email sent via Brevo API to ${options.to}`);
-        return;
-      } catch (err) {
-        this.logger.error(`Brevo API failed: ${(err as Error).message}`);
-      }
-    }
 
     if (resendApiKey) {
       try {
