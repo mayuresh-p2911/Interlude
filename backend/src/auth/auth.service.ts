@@ -213,7 +213,7 @@ export class AuthService {
 
     const passwordMatch = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatch) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Incorrect password');
     }
 
     if (!user.isVerified) {

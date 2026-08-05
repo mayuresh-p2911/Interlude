@@ -63,9 +63,9 @@ export default function LoginPage() {
         window.location.href = '/home';
       }
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Invalid email or password';
+      const responseData = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      const rawMessage = responseData?.message ?? (err as { message?: string })?.message ?? 'Incorrect password';
+      const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage;
 
       const lowerMsg = message.toLowerCase();
 
@@ -73,15 +73,18 @@ export default function LoginPage() {
         setCaptchaError(message);
         setRefreshTrigger((prev) => prev + 1);
       } else if (
+        lowerMsg.includes('incorrect password') ||
+        lowerMsg.includes('password')
+      ) {
+        setPasswordError(message);
+      } else if (
+        lowerMsg.includes('no account linked') ||
         lowerMsg.includes('email') ||
         lowerMsg.includes('account') ||
         lowerMsg.includes('unregistered')
       ) {
         setEmailError(message);
-      } else if (lowerMsg.includes('password')) {
-        setPasswordError(message);
       } else {
-        // Fallback for general auth error (e.g. "Invalid email or password")
         setPasswordError(message);
       }
     }
