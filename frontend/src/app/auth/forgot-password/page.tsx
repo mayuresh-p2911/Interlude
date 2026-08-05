@@ -23,7 +23,7 @@ export default function ForgotPasswordPage() {
       const responseData = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       const rawMessage = responseData?.message;
       const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage;
-      toast.error(message ?? 'Email not registered');
+      toast.error(message ?? 'No account linked to this email');
     } finally {
       setIsLoading(false);
     }

@@ -204,7 +204,7 @@ export class AuthService {
       .select('+password +twoFactorCode +twoFactorExpiry +lastOtpSentAt');
 
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('No account linked to this email');
     }
 
     if (user.isBlocked) {
@@ -572,7 +572,7 @@ export class AuthService {
 
     if (!user) {
       this.logger.warn(`Password reset requested for unregistered email: ${cleanEmail}`);
-      throw new NotFoundException('Email not registered');
+      throw new NotFoundException('No account linked to this email');
     }
 
     const resetToken = uuidv4();
