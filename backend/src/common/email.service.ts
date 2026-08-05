@@ -35,26 +35,26 @@ export class EmailService implements OnModuleDestroy {
     this.fromAddress =
       this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
 
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
-
     const isGmail =
       smtpUser.toLowerCase().endsWith('@gmail.com') ||
       smtpHost.toLowerCase().includes('gmail.com');
 
-    this.transporter = nodemailer.createTransport({
-      host: smtpHost || 'smtp.gmail.com',
-      port: smtpPort === 465 ? 465 : 587,
-      secure: smtpPort === 465,
-      requireTLS: smtpPort !== 465,
-      auth: { user: smtpUser, pass: smtpPass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 15_000,
-    });
-    this.logger.log(
-      `📧 Email service initialized (${resendApiKey ? 'Resend API' : isGmail ? 'Gmail SMTP:587' : `${smtpHost}:${smtpPort}`})`,
+    this.transporter = nodemailer.createTransport(
+      isGmail
+        ? {
+            service: 'gmail',
+            auth: { user: smtpUser, pass: smtpPass },
+            tls: { rejectUnauthorized: false },
+          }
+        : {
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: { user: smtpUser, pass: smtpPass },
+            tls: { rejectUnauthorized: false },
+          },
     );
+    this.logger.log(`📧 Email service initialized via ${isGmail ? 'Gmail SMTP' : smtpHost}`);
   }
 
   onModuleDestroy() {
@@ -135,34 +135,6 @@ export class EmailService implements OnModuleDestroy {
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 15_000,
   ) {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
-    if (resendApiKey) {
-      const resendFrom =
-        this.configService.get<string>('RESEND_FROM')?.trim() || 'INTERLUDE <onboarding@resend.dev>';
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: resendFrom,
-          to: [options.to],
-          subject: options.subject,
-          html: options.html,
-          text: options.text,
-        }),
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`Resend API failed (${response.status}): ${errorText}`);
-        throw new Error(`Resend API failed (${response.status}): ${errorText}`);
-      }
-      const data = (await response.json()) as { id?: string };
-      this.logger.log(`✉️ Resend OTP email dispatched to ${options.to}: ${data.id}`);
-      return { messageId: data.id ?? 'resend-ok' };
-    }
-
     return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
