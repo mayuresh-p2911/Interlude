@@ -572,7 +572,7 @@ export class AuthService {
 
     if (!user) {
       this.logger.warn(`Password reset requested for unregistered email: ${cleanEmail}`);
-      return { message: 'If that email exists, a reset link has been sent' };
+      throw new NotFoundException('Email not registered');
     }
 
     const resetToken = uuidv4();

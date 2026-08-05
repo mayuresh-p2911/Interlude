@@ -18,9 +18,12 @@ export default function ForgotPasswordPage() {
     try {
       await authApi.forgotPassword(email);
       setSent(true);
-    } catch {
-      // Always show success to prevent email enumeration
-      setSent(true);
+      toast.success('Password reset link sent to your email');
+    } catch (err: unknown) {
+      const responseData = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      const rawMessage = responseData?.message;
+      const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage;
+      toast.error(message ?? 'Email not registered');
     } finally {
       setIsLoading(false);
     }
