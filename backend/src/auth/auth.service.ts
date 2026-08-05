@@ -548,9 +548,11 @@ export class AuthService {
 
   // ── Forgot Password ───────────────────────────────────────────
   async forgotPassword(dto: ForgotPasswordDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const cleanEmail = dto.email ? dto.email.trim().toLowerCase() : '';
+    const user = await this.userModel.findOne({ email: cleanEmail });
 
     if (!user) {
+      this.logger.warn(`Password reset requested for unregistered email: ${cleanEmail}`);
       return { message: 'If that email exists, a reset link has been sent' };
     }
 

@@ -64,21 +64,57 @@ export class EmailService implements OnModuleDestroy {
   async sendVerificationEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
-    await this.deliverMail({
-      to: email,
-      subject: 'Verify your INTERLUDE account',
-      html: this.buildVerificationEmailHtml(username, verificationUrl),
-    });
+
+    this.logger.log(`🔗 [VERIFICATION LINK FOR ${email}]: ${verificationUrl}`);
+    this.logger.log('╔══════════════════════════════════════════════════╗');
+    this.logger.log(`║  INTERLUDE Email Verification Link for ${email}`);
+    this.logger.log(`║  URL: ${verificationUrl}`);
+    this.logger.log('╚══════════════════════════════════════════════════╝');
+
+    try {
+      const info = await this.deliverMail(
+        {
+          to: email,
+          subject: 'Verify your INTERLUDE account',
+          text: `Hi ${username || 'there'},\n\nClick the link below to verify your INTERLUDE account:\n\n${verificationUrl}\n\nThis link expires in 24 hours.`,
+          html: this.buildVerificationEmailHtml(username, verificationUrl),
+        },
+        10_000,
+      );
+      this.logger.log(`✉️ Verification email dispatched to ${email}: ${info.messageId}`);
+    } catch (error) {
+      this.logger.error(
+        `❌ FAILED TO SEND VERIFICATION EMAIL TO ${email}: ${(error as Error)?.stack ?? (error as Error)?.message ?? String(error)}`,
+      );
+    }
   }
 
   async sendPasswordResetEmail(email: string, username: string, token: string) {
     const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
-    await this.deliverMail({
-      to: email,
-      subject: 'Reset your INTERLUDE password',
-      html: this.buildPasswordResetEmailHtml(username, resetUrl),
-    });
+
+    this.logger.log(`🔗 [RESET LINK FOR ${email}]: ${resetUrl}`);
+    this.logger.log('╔══════════════════════════════════════════════════╗');
+    this.logger.log(`║  INTERLUDE Password Reset Link for ${email}`);
+    this.logger.log(`║  URL: ${resetUrl}`);
+    this.logger.log('╚══════════════════════════════════════════════════╝');
+
+    try {
+      const info = await this.deliverMail(
+        {
+          to: email,
+          subject: 'Reset your INTERLUDE password',
+          text: `Hi ${username || 'there'},\n\nClick the link below to reset your INTERLUDE password:\n\n${resetUrl}\n\nThis link expires in 1 hour.\nIf you did not request a password reset, please ignore this email.`,
+          html: this.buildPasswordResetEmailHtml(username, resetUrl),
+        },
+        10_000,
+      );
+      this.logger.log(`✉️ Password reset email dispatched to ${email}: ${info.messageId}`);
+    } catch (error) {
+      this.logger.error(
+        `❌ FAILED TO SEND PASSWORD RESET EMAIL TO ${email}: ${(error as Error)?.stack ?? (error as Error)?.message ?? String(error)}`,
+      );
+    }
   }
 
   async sendTwoFactorCodeEmail(email: string, username: string, code: string) {
