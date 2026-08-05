@@ -92,14 +92,12 @@ export class EmailService implements OnModuleDestroy {
           text: `Hi ${username || 'there'}, your INTERLUDE verification code is: ${code}. It expires in 10 minutes.`,
           html: this.buildTwoFactorEmailHtml(username, code),
         },
-        15_000,
+        7_000,
       );
       this.logger.log(`✉️ OTP email dispatched to ${email}: ${info.messageId}`);
-
-      this.logger.log(`✉️ OTP email dispatched to ${email}`);
     } catch (error) {
-      this.logger.warn(
-        `⚠️ Could not send OTP email to ${email}: ${(error as Error)?.message ?? String(error)}. (Code logged in console above)`,
+      this.logger.error(
+        `❌ FAILED TO SEND OTP EMAIL TO ${email}: ${(error as Error)?.stack ?? (error as Error)?.message ?? String(error)}`,
       );
     }
   }
