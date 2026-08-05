@@ -131,6 +131,16 @@ export class AuthService {
     }
   }
 
+  private async sendResetPasswordEmail(email: string, username: string, token: string) {
+    try {
+      await this.emailService.sendPasswordResetEmail(email, username, token);
+    } catch (err: unknown) {
+      this.logger.error(
+        `Reset password email failed for ${email}: ${(err as Error)?.message ?? String(err)}`,
+      );
+    }
+  }
+
   // ── Register ────────────────────────────────────────────────
   //
   // No permanent User or Settings record is created here.
@@ -573,10 +583,8 @@ export class AuthService {
       passwordResetExpiry: resetExpiry,
     });
 
-    const targetEmail = user.email || cleanEmail;
-    await this.emailService
-      .sendPasswordResetEmail(targetEmail, user.username, resetToken)
-      .catch((err: unknown) => this.logger.error(`Failed to send password reset email to ${targetEmail}`, err));
+    const targetEmail = cleanEmail || user.email;
+    await this.sendResetPasswordEmail(targetEmail, user.username, resetToken);
 
     return { message: 'If that email exists, a reset link has been sent' };
   }
