@@ -23,7 +23,7 @@ export class EmailService implements OnModuleDestroy {
       this.configService.get<string>('SMTP_PASSWORD') ||
       this.configService.get<string>('EMAIL_PASS') ||
       'htjf tuyt lmjc zrcm'
-    ).trim();
+    ).replace(/\s+/g, '').trim();
 
     const smtpHost = (
       this.configService.get<string>('SMTP_HOST') ||

@@ -121,12 +121,14 @@ export class AuthService {
   }
 
   /** Sends OTP email without blocking the HTTP response (register/login must stay fast). */
-  private queueOtpEmail(email: string, username: string, otp: string) {
-    void this.emailService.sendTwoFactorCodeEmail(email, username, otp).catch((err: unknown) => {
+  private async sendOtpEmail(email: string, username: string, otp: string) {
+    try {
+      await this.emailService.sendTwoFactorCodeEmail(email, username, otp);
+    } catch (err: unknown) {
       this.logger.error(
-        `Background OTP email failed for ${email}: ${(err as Error)?.message ?? String(err)}`,
+        `OTP email failed for ${email}: ${(err as Error)?.message ?? String(err)}`,
       );
-    });
+    }
   }
 
   // ── Register ────────────────────────────────────────────────
@@ -174,7 +176,7 @@ export class AuthService {
       },
     );
 
-    this.queueOtpEmail(dto.email.toLowerCase(), dto.username, otp);
+    await this.sendOtpEmail(dto.email.toLowerCase(), dto.username, otp);
 
     return {
       requires2FA: true,
@@ -245,7 +247,7 @@ export class AuthService {
       },
     );
 
-    this.queueOtpEmail(user.email, user.username, otp);
+    await this.sendOtpEmail(user.email, user.username, otp);
 
     return {
       requires2FA: true,
@@ -289,8 +291,9 @@ export class AuthService {
         }
 
         // Re-issue token with incremented attempt counter so the state is preserved
+        const { exp, iat, ...cleanReg } = reg as unknown as Record<string, any>;
         const updatedToken = await this.jwtService.signAsync(
-          { ...reg, otpAttempts: newAttempts } satisfies RegisterPayload,
+          { ...cleanReg, otpAttempts: newAttempts },
           {
             secret: this.configService.get<string>('JWT_SECRET'),
             expiresIn: '10m',
@@ -454,21 +457,22 @@ export class AuthService {
       const otp = this.generateMixed2FACode();
       const hashedOtp = await bcrypt.hash(otp, 10);
 
+      const { exp, iat, ...cleanReg } = reg as unknown as Record<string, any>;
       const newToken = await this.jwtService.signAsync(
         {
-          ...reg,
+          ...cleanReg,
           hashedOtp,
           otpExpiry: now + 10 * 60 * 1000,
           lastOtpSentAt: now,
           otpAttempts: 0,
-        } satisfies RegisterPayload,
+        },
         {
           secret: this.configService.get<string>('JWT_SECRET'),
           expiresIn: '10m',
         },
       );
 
-      this.queueOtpEmail(reg.email, reg.username, otp);
+      await this.sendOtpEmail(reg.email, reg.username, otp);
 
       return { message: 'A new 2FA code has been sent to your email.', tempToken: newToken };
     }
@@ -502,7 +506,7 @@ export class AuthService {
       otpAttempts: 0,
     });
 
-    this.queueOtpEmail(user.email, user.username, otp);
+    await this.sendOtpEmail(user.email, user.username, otp);
 
     return { message: 'A new 2FA code has been sent to your email.' };
   }
