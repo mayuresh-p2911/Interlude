@@ -137,6 +137,8 @@ export class EmailService implements OnModuleDestroy {
   ) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
     if (resendApiKey) {
+      const resendFrom =
+        this.configService.get<string>('RESEND_FROM')?.trim() || 'INTERLUDE <onboarding@resend.dev>';
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -144,7 +146,7 @@ export class EmailService implements OnModuleDestroy {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`,
+          from: resendFrom,
           to: [options.to],
           subject: options.subject,
           html: options.html,
@@ -153,9 +155,11 @@ export class EmailService implements OnModuleDestroy {
       });
       if (!response.ok) {
         const errorText = await response.text();
+        this.logger.error(`Resend API failed (${response.status}): ${errorText}`);
         throw new Error(`Resend API failed (${response.status}): ${errorText}`);
       }
       const data = (await response.json()) as { id?: string };
+      this.logger.log(`✉️ Resend OTP email dispatched to ${options.to}: ${data.id}`);
       return { messageId: data.id ?? 'resend-ok' };
     }
 
