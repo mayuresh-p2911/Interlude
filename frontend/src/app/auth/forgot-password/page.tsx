@@ -9,11 +9,13 @@ import { authApi } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setEmailError('');
     setIsLoading(true);
     try {
       await authApi.forgotPassword(email);
@@ -23,7 +25,7 @@ export default function ForgotPasswordPage() {
       const responseData = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       const rawMessage = responseData?.message;
       const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage;
-      toast.error(message ?? 'No account linked to this email');
+      setEmailError(message ?? 'No account linked to this email');
     } finally {
       setIsLoading(false);
     }
@@ -61,12 +63,22 @@ export default function ForgotPasswordPage() {
           <input
             id="forgot-email"
             type="email"
-            className="input-field"
+            className={`input-field ${
+              emailError ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
+            }`}
             placeholder="you@example.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setEmailError('');
+            }}
             required
           />
+          {emailError && (
+            <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+              ⚠️ {emailError}
+            </p>
+          )}
         </div>
 
         <motion.button

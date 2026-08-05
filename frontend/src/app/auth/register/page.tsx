@@ -25,6 +25,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Field Error States
+  const [usernameError, setUsernameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [ageError, setAgeError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
   // CAPTCHA State
   const [captchaData, setCaptchaData] = useState<{ captchaToken: string; captchaInput: string }>({
     captchaToken: '',
@@ -40,19 +46,22 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUsernameError('');
+    setEmailError('');
+    setAgeError('');
+    setPasswordError('');
     setCaptchaError('');
 
     if (typeof age !== 'number' || age < 18) {
-      toast.error('You must be at least 18 years old to register');
+      setAgeError('You must be at least 18 years old to register');
       return;
     }
     if (!passwordRequirements.every((r) => r.test(password))) {
-      toast.error('Please meet all password requirements');
+      setPasswordError('Please meet all password requirements');
       return;
     }
     if (!captchaData.captchaInput) {
       setCaptchaError('Please enter the CAPTCHA characters');
-      toast.error('Please complete the CAPTCHA verification');
       return;
     }
 
@@ -81,11 +90,22 @@ export default function RegisterPage() {
         (err as { message?: string })?.message ??
         'Registration failed. Please try again.';
 
-      if (message.toLowerCase().includes('captcha')) {
+      const lowerMsg = message.toLowerCase();
+
+      if (lowerMsg.includes('captcha')) {
         setCaptchaError(message);
         setRefreshTrigger((prev) => prev + 1);
+      } else if (lowerMsg.includes('username')) {
+        setUsernameError(message);
+      } else if (lowerMsg.includes('email') || lowerMsg.includes('account')) {
+        setEmailError(message);
+      } else if (lowerMsg.includes('age')) {
+        setAgeError(message);
+      } else if (lowerMsg.includes('password')) {
+        setPasswordError(message);
+      } else {
+        setUsernameError(message);
       }
-      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -106,17 +126,28 @@ export default function RegisterPage() {
           <input
             id="register-username"
             type="text"
-            className="input-field"
+            className={`input-field ${
+              usernameError ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
+            }`}
             placeholder="coolcineaste"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setUsernameError('');
+            }}
             required
             minLength={3}
             maxLength={30}
             pattern="^[a-zA-Z0-9_]+$"
             autoComplete="username"
           />
-          <p className="mt-1 text-xs text-text-muted">Letters, numbers, and underscores only</p>
+          {usernameError ? (
+            <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+              ⚠️ {usernameError}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-text-muted">Letters, numbers, and underscores only</p>
+          )}
         </div>
 
         <div>
@@ -126,13 +157,23 @@ export default function RegisterPage() {
           <input
             id="register-email"
             type="email"
-            className="input-field"
+            className={`input-field ${
+              emailError ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
+            }`}
             placeholder="you@example.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setEmailError('');
+            }}
             required
             autoComplete="email"
           />
+          {emailError && (
+            <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+              ⚠️ {emailError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -144,13 +185,24 @@ export default function RegisterPage() {
             type="number"
             min={18}
             max={120}
-            className="input-field"
+            className={`input-field ${
+              ageError ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
+            }`}
             placeholder="21"
             value={age}
-            onChange={(e) => setAge(e.target.value ? parseInt(e.target.value, 10) : '')}
+            onChange={(e) => {
+              setAge(e.target.value ? parseInt(e.target.value, 10) : '');
+              setAgeError('');
+            }}
             required
           />
-          <p className="mt-1 text-xs text-text-muted">You must be at least 18 years old to join INTERLUDE</p>
+          {ageError ? (
+            <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+              ⚠️ {ageError}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-text-muted">You must be at least 18 years old to join INTERLUDE</p>
+          )}
         </div>
 
         <div>
@@ -161,10 +213,15 @@ export default function RegisterPage() {
             <input
               id="register-password"
               type={showPassword ? 'text' : 'password'}
-              className="input-field pr-12"
+              className={`input-field pr-12 ${
+                passwordError ? 'border-red-500/80 focus:border-red-500 ring-2 ring-red-500/20' : ''
+              }`}
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPasswordError('');
+              }}
               required
               minLength={8}
               autoComplete="new-password"
@@ -177,6 +234,11 @@ export default function RegisterPage() {
               {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
             </button>
           </div>
+          {passwordError && (
+            <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+              ⚠️ {passwordError}
+            </p>
+          )}
 
           {password && (
             <motion.div
