@@ -549,7 +549,16 @@ export class AuthService {
   // ── Forgot Password ───────────────────────────────────────────
   async forgotPassword(dto: ForgotPasswordDto) {
     const cleanEmail = dto.email ? dto.email.trim().toLowerCase() : '';
-    const user = await this.userModel.findOne({ email: cleanEmail });
+    const rawEmail = dto.email ? dto.email.trim() : '';
+
+    const escapedEmail = cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    const user = await this.userModel.findOne({
+      $or: [
+        { email: cleanEmail },
+        { email: rawEmail },
+        { email: { $regex: `^${escapedEmail}$`, $options: 'i' } },
+      ],
+    });
 
     if (!user) {
       this.logger.warn(`Password reset requested for unregistered email: ${cleanEmail}`);
@@ -564,9 +573,10 @@ export class AuthService {
       passwordResetExpiry: resetExpiry,
     });
 
+    const targetEmail = user.email || cleanEmail;
     await this.emailService
-      .sendPasswordResetEmail(user.email, user.username, resetToken)
-      .catch((err: unknown) => this.logger.error('Failed to send password reset email', err));
+      .sendPasswordResetEmail(targetEmail, user.username, resetToken)
+      .catch((err: unknown) => this.logger.error(`Failed to send password reset email to ${targetEmail}`, err));
 
     return { message: 'If that email exists, a reset link has been sent' };
   }

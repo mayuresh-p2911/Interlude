@@ -169,28 +169,36 @@ export class EmailService implements OnModuleDestroy {
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 15_000,
   ) {
-    return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+    const attemptSend = () =>
+      new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
 
-      this.transporter
-        .sendMail({
-          from: this.fromAddress,
-          to: options.to,
-          subject: options.subject,
-          html: options.html,
-          text: options.text,
-        })
-        .then((info) => {
-          clearTimeout(timer);
-          resolve(info);
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          reject(err);
-        });
-    });
+        this.transporter
+          .sendMail({
+            from: this.fromAddress,
+            to: options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+          })
+          .then((info) => {
+            clearTimeout(timer);
+            resolve(info);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+
+    try {
+      return await attemptSend();
+    } catch (err) {
+      this.logger.warn(`SMTP send initial attempt failed for ${options.to}: ${(err as Error)?.message ?? String(err)}. Retrying...`);
+      return await attemptSend();
+    }
   }
 
   private buildVerificationEmailHtml(username: string, url: string): string {
@@ -206,7 +214,8 @@ export class EmailService implements OnModuleDestroy {
           <div style="text-align:center;margin:32px 0;">
             <a href="${url}" style="background:#2563EB;color:#fff;padding:16px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:600;display:inline-block;">Verify Email Address</a>
           </div>
-          <p style="color:#64748B;font-size:14px;">This link expires in 24 hours.</p>
+          <p style="color:#94A3B8;font-size:13px;word-break:break-all;">Or copy and paste this link into your browser:<br/><a href="${url}" style="color:#60A5FA;">${url}</a></p>
+          <p style="color:#64748B;font-size:14px;margin-top:24px;">This link expires in 24 hours.</p>
         </div>
       </div></body></html>`;
   }
@@ -223,7 +232,8 @@ export class EmailService implements OnModuleDestroy {
           <div style="text-align:center;margin:32px 0;">
             <a href="${url}" style="background:#2563EB;color:#fff;padding:16px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:600;display:inline-block;">Reset Password</a>
           </div>
-          <p style="color:#64748B;font-size:14px;">This link expires in 1 hour.</p>
+          <p style="color:#94A3B8;font-size:13px;word-break:break-all;">Or copy and paste this link into your browser:<br/><a href="${url}" style="color:#60A5FA;">${url}</a></p>
+          <p style="color:#64748B;font-size:14px;margin-top:24px;">This link expires in 1 hour.</p>
         </div>
       </div></body></html>`;
   }
