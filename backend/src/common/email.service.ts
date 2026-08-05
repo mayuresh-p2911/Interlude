@@ -35,33 +35,26 @@ export class EmailService implements OnModuleDestroy {
     this.fromAddress =
       this.configService.get<string>('EMAIL_FROM')?.trim() || `INTERLUDE <${smtpUser}>`;
 
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+
     const isGmail =
       smtpUser.toLowerCase().endsWith('@gmail.com') ||
       smtpHost.toLowerCase().includes('gmail.com');
 
-    const transportConfig = isGmail
-      ? {
-          service: 'gmail',
-          auth: { user: smtpUser, pass: smtpPass },
-          tls: { rejectUnauthorized: false },
-          debug: true,
-        }
-      : {
-          host: smtpHost,
-          port: smtpPort,
-          secure: smtpPort === 465,
-          auth: { user: smtpUser, pass: smtpPass },
-          tls: { rejectUnauthorized: false },
-          debug: true,
-        };
-
     this.transporter = nodemailer.createTransport({
-      ...transportConfig,
-      connectionTimeout: 15_000,
+      host: smtpHost || 'smtp.gmail.com',
+      port: smtpPort === 465 ? 465 : 587,
+      secure: smtpPort === 465,
+      requireTLS: smtpPort !== 465,
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10_000,
       greetingTimeout: 10_000,
-      socketTimeout: 20_000,
+      socketTimeout: 15_000,
     });
-    this.logger.log(`📧 Email service initialized (${isGmail ? 'Gmail' : smtpHost})`);
+    this.logger.log(
+      `📧 Email service initialized (${resendApiKey ? 'Resend API' : isGmail ? 'Gmail SMTP:587' : `${smtpHost}:${smtpPort}`})`,
+    );
   }
 
   onModuleDestroy() {
@@ -131,18 +124,41 @@ export class EmailService implements OnModuleDestroy {
   }
 
   private logOtpToConsole(email: string, code: string) {
-    this.logger.log('');
+    this.logger.log(`🔑 [OTP CODE FOR ${email}]: ${code}`);
     this.logger.log('╔══════════════════════════════════════════════════╗');
     this.logger.log(`║  INTERLUDE verification code for ${email}`);
     this.logger.log(`║  CODE: ${code}`);
     this.logger.log('╚══════════════════════════════════════════════════╝');
-    this.logger.log('');
   }
 
   private async deliverMail(
     options: { to: string; subject: string; html: string; text?: string },
     timeoutMs = 15_000,
   ) {
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY')?.trim();
+    if (resendApiKey) {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.fromAddress.includes('<') ? this.fromAddress : `INTERLUDE <${this.fromAddress}>`,
+          to: [options.to],
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Resend API failed (${response.status}): ${errorText}`);
+      }
+      const data = (await response.json()) as { id?: string };
+      return { messageId: data.id ?? 'resend-ok' };
+    }
+
     return new Promise<nodemailer.SentMessageInfo>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`SMTP timed out after ${timeoutMs}ms`));
