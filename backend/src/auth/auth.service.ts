@@ -131,9 +131,9 @@ export class AuthService {
     }
   }
 
-  private async sendResetPasswordEmail(email: string, username: string, token: string) {
+  private async sendResetPasswordEmail(email: string, username: string, token: string, origin?: string) {
     try {
-      await this.emailService.sendPasswordResetEmail(email, username, token);
+      await this.emailService.sendPasswordResetEmail(email, username, token, origin);
     } catch (err: unknown) {
       this.logger.error(
         `Reset password email failed for ${email}: ${(err as Error)?.message ?? String(err)}`,
@@ -557,7 +557,7 @@ export class AuthService {
   }
 
   // ── Forgot Password ───────────────────────────────────────────
-  async forgotPassword(dto: ForgotPasswordDto) {
+  async forgotPassword(dto: ForgotPasswordDto, origin?: string) {
     const cleanEmail = dto.email ? dto.email.trim().toLowerCase() : '';
     const rawEmail = dto.email ? dto.email.trim() : '';
 
@@ -584,7 +584,7 @@ export class AuthService {
     });
 
     const targetEmail = cleanEmail || user.email;
-    await this.sendResetPasswordEmail(targetEmail, user.username, resetToken);
+    await this.sendResetPasswordEmail(targetEmail, user.username, resetToken, origin);
 
     return { message: 'If that email exists, a reset link has been sent' };
   }

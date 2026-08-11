@@ -103,8 +103,27 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset email' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+  async forgotPassword(@Req() req: Request, @Body() dto: ForgotPasswordDto) {
+    const rawOrigin =
+      (req.headers['origin'] as string) ||
+      (req.headers['referer'] as string);
+
+    let requestOrigin: string | undefined = undefined;
+    if (rawOrigin) {
+      try {
+        requestOrigin = new URL(rawOrigin).origin;
+      } catch {}
+    }
+
+    if (!requestOrigin) {
+      const host = (req.headers['x-forwarded-host'] as string) || req.headers['host'];
+      const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
+      if (host) {
+        requestOrigin = `${proto}://${host}`;
+      }
+    }
+
+    return this.authService.forgotPassword(dto, requestOrigin);
   }
 
   @Public()

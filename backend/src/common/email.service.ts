@@ -61,7 +61,11 @@ export class EmailService implements OnModuleDestroy {
     this.transporter.close();
   }
 
-  private getAppUrl(): string {
+  private getAppUrl(requestOrigin?: string): string {
+    if (requestOrigin && (requestOrigin.startsWith('http://') || requestOrigin.startsWith('https://'))) {
+      return requestOrigin.replace(/\/+$/, '');
+    }
+
     const envUrl =
       this.configService.get<string>('FRONTEND_URL') ||
       this.configService.get<string>('APP_URL') ||
@@ -75,8 +79,8 @@ export class EmailService implements OnModuleDestroy {
     return rawUrl.replace(/\/+$/, '');
   }
 
-  async sendVerificationEmail(email: string, username: string, token: string) {
-    const appUrl = this.getAppUrl();
+  async sendVerificationEmail(email: string, username: string, token: string, origin?: string) {
+    const appUrl = this.getAppUrl(origin);
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
 
     this.logger.log(`🔗 [VERIFICATION LINK FOR ${email}]: ${verificationUrl}`);
@@ -103,8 +107,8 @@ export class EmailService implements OnModuleDestroy {
     }
   }
 
-  async sendPasswordResetEmail(email: string, username: string, token: string) {
-    const appUrl = this.getAppUrl();
+  async sendPasswordResetEmail(email: string, username: string, token: string, origin?: string) {
+    const appUrl = this.getAppUrl(origin);
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
 
     this.logger.log(`🔗 [RESET LINK FOR ${email}]: ${resetUrl}`);
