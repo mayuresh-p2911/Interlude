@@ -143,9 +143,7 @@ export const usersApi = {
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    return api.post('/users/me/avatar', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post('/users/me/avatar', formData);
   },
   searchUsers: (query: string) => api.get(`/users/search?q=${encodeURIComponent(query)}`),
   getWatchlist: (page = 1) => api.get(`/users/me/watchlist?page=${page}`),
