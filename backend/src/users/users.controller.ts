@@ -12,6 +12,7 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -96,13 +97,17 @@ export class UsersController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp|gif|svg|avif|bmp)$/i }),
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
+          new FileTypeValidator({ fileType: /^image\//i }),
         ],
+        fileIsRequired: true,
       }),
     )
     file: Express.Multer.File,
   ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('No image file provided');
+    }
     return this.usersService.uploadAvatar(user._id, file.buffer);
   }
 
