@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import path from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -58,6 +59,11 @@ async function bootstrap() {
 
   // ── Global Prefix ─────────────────────────────────────────
   app.setGlobalPrefix('api');
+
+  // ── Static Assets (Local Uploads Fallback) ────────────────
+  app.useStaticAssets(path.join(process.cwd(), 'uploads'), {
+    prefix: '/api/uploads',
+  });
 
   // ── Validation ────────────────────────────────────────────
   app.useGlobalPipes(

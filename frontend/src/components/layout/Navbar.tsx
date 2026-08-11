@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,9 @@ import Image from 'next/image';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
-import { notificationsApi } from '@/lib/api';
+import { notificationsApi, friendsApi } from '@/lib/api';
+import { getSocket } from '@/hooks/useSocket';
+import { useUnreadStore } from '@/store/useUnreadStore';
 
 export default function Navbar() {
   const { user, logout } = useAuthStore();
@@ -24,6 +26,17 @@ export default function Navbar() {
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const socket = getSocket();
+
+  const {
+    setUnreadNotifications,
+    setPendingFriends,
+    incrementUnreadMessages,
+    incrementPendingFriends,
+    incrementUnreadGroups,
+    incrementUnreadNotifications,
+    unreadNotificationsCount,
+  } = useUnreadStore();
 
   const { data: notificationData } = useQuery({
     queryKey: ['notifications-count'],
@@ -31,7 +44,58 @@ export default function Navbar() {
     refetchInterval: 30000,
   });
 
-  const unreadCount = (notificationData?.data as { unread?: number })?.unread ?? 0;
+  const apiUnreadCount = (notificationData?.data as { unread?: number })?.unread ?? 0;
+
+  useEffect(() => {
+    if (apiUnreadCount > 0) {
+      setUnreadNotifications(apiUnreadCount);
+    }
+  }, [apiUnreadCount, setUnreadNotifications]);
+
+  useEffect(() => {
+    if (!user) return;
+    friendsApi.getRequests().then((res) => {
+      const requests = (res.data as unknown[]) ?? [];
+      setPendingFriends(requests.length);
+    }).catch(() => {});
+  }, [user, setPendingFriends]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDmReceive = (msg: { sender?: { _id?: string } }) => {
+      if (!pathname.includes(msg?.sender?._id ?? '')) {
+        incrementUnreadMessages();
+      }
+    };
+
+    const handleFriendRequest = () => {
+      incrementPendingFriends();
+      toast('New friend request received!', { icon: '👥' });
+    };
+
+    const handleGroupMsg = () => {
+      if (!pathname.startsWith('/groups')) {
+        incrementUnreadGroups();
+      }
+    };
+
+    const handleNotificationNew = () => {
+      incrementUnreadNotifications();
+    };
+
+    socket.on('dm:receive', handleDmReceive);
+    socket.on('friend:request', handleFriendRequest);
+    socket.on('group:message:receive', handleGroupMsg);
+    socket.on('notification:new', handleNotificationNew);
+
+    return () => {
+      socket.off('dm:receive', handleDmReceive);
+      socket.off('friend:request', handleFriendRequest);
+      socket.off('group:message:receive', handleGroupMsg);
+      socket.off('notification:new', handleNotificationNew);
+    };
+  }, [socket, pathname, incrementUnreadMessages, incrementPendingFriends, incrementUnreadGroups, incrementUnreadNotifications]);
 
   const handleLogout = async () => {
     await logout();
@@ -84,8 +148,8 @@ export default function Navbar() {
             className="relative p-2.5 rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-all"
           >
             <BellIcon className="w-5 h-5" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-electric rounded-full" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-electric rounded-full animate-pulse" />
             )}
           </Link>
 

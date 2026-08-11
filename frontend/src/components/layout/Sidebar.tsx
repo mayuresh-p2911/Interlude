@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -20,25 +21,65 @@ import {
   UsersIcon as UsersIconSolid,
 } from '@heroicons/react/24/solid';
 import clsx from 'clsx';
+import { useUnreadStore } from '@/store/useUnreadStore';
 
 const navItems = [
-  { href: '/home', label: 'Home', Icon: HomeIcon, IconActive: HomeIconSolid },
-  { href: '/friends', label: 'Friends', Icon: UsersIcon, IconActive: UsersIconSolid },
-  { href: '/groups', label: 'Groups', Icon: UserGroupIcon, IconActive: UserGroupIconSolid },
-  { href: '/messages', label: 'Messages', Icon: ChatBubbleLeftRightIcon, IconActive: ChatIconSolid },
-  { href: '/notifications', label: 'Notifications', Icon: BellIcon, IconActive: BellIconSolid },
+  { href: '/home', label: 'Home', Icon: HomeIcon, IconActive: HomeIconSolid, key: 'home' },
+  { href: '/friends', label: 'Friends', Icon: UsersIcon, IconActive: UsersIconSolid, key: 'friends' },
+  { href: '/groups', label: 'Groups', Icon: UserGroupIcon, IconActive: UserGroupIconSolid, key: 'groups' },
+  { href: '/messages', label: 'Messages', Icon: ChatBubbleLeftRightIcon, IconActive: ChatIconSolid, key: 'messages' },
+  { href: '/notifications', label: 'Notifications', Icon: BellIcon, IconActive: BellIconSolid, key: 'notifications' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const {
+    unreadMessagesCount,
+    pendingFriendsCount,
+    unreadGroupsCount,
+    unreadNotificationsCount,
+    clearUnreadMessages,
+    clearPendingFriends,
+    clearUnreadGroups,
+    clearUnreadNotifications,
+  } = useUnreadStore();
+
+  useEffect(() => {
+    if (pathname.startsWith('/friends')) clearPendingFriends();
+    if (pathname.startsWith('/messages')) clearUnreadMessages();
+    if (pathname.startsWith('/groups')) clearUnreadGroups();
+    if (pathname.startsWith('/notifications')) clearUnreadNotifications();
+  }, [
+    pathname,
+    clearPendingFriends,
+    clearUnreadMessages,
+    clearUnreadGroups,
+    clearUnreadNotifications,
+  ]);
+
+  const getUnreadCount = (key: string) => {
+    switch (key) {
+      case 'friends':
+        return pendingFriendsCount;
+      case 'messages':
+        return unreadMessagesCount;
+      case 'groups':
+        return unreadGroupsCount;
+      case 'notifications':
+        return unreadNotificationsCount;
+      default:
+        return 0;
+    }
+  };
 
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col fixed left-0 top-16 bottom-0 w-64 glass border-r border-white/5 py-6 px-4 overflow-y-auto">
+      <aside className="hidden lg:flex flex-col fixed left-0 top-16 bottom-0 w-64 glass border-r border-white/5 py-6 px-4 overflow-y-auto z-40">
         <nav className="space-y-1">
-          {navItems.map(({ href, label, Icon, IconActive }) => {
+          {navItems.map(({ href, label, Icon, IconActive, key }) => {
             const isActive = pathname.startsWith(href);
+            const count = getUnreadCount(key);
             return (
               <Link
                 key={href}
@@ -65,7 +106,12 @@ export default function Sidebar() {
                     <Icon className="w-5 h-5 group-hover:text-blue-ice transition-colors" />
                   )}
                 </span>
-                <span className="relative z-10">{label}</span>
+                <span className="relative z-10 flex-1">{label}</span>
+                {count > 0 && (
+                  <span className="relative z-10 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-electric text-white shadow-blue-glow animate-pulse">
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
                 {isActive && (
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-blue-electric rounded-r-full" />
                 )}
@@ -92,20 +138,26 @@ export default function Sidebar() {
       {/* Mobile Bottom Nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 pb-safe">
         <div className="flex items-center justify-around py-2">
-          {navItems.map(({ href, label, Icon, IconActive }) => {
+          {navItems.map(({ href, label, Icon, IconActive, key }) => {
             const isActive = pathname.startsWith(href);
+            const count = getUnreadCount(key);
             return (
               <Link
                 key={href}
                 href={href}
-                className="flex flex-col items-center gap-1 px-3 py-2"
+                className="flex flex-col items-center gap-1 px-3 py-2 relative"
               >
-                {isActive ? (
-                  <IconActive className="w-5 h-5 text-blue-electric" />
-                ) : (
-                  <Icon className="w-5 h-5 text-text-muted" />
-                )}
-                <span className={clsx('text-xs', isActive ? 'text-blue-electric' : 'text-text-muted')}>
+                <div className="relative">
+                  {isActive ? (
+                    <IconActive className="w-5 h-5 text-blue-electric" />
+                  ) : (
+                    <Icon className="w-5 h-5 text-text-muted" />
+                  )}
+                  {count > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-electric rounded-full border-2 border-surface-1 animate-pulse" />
+                  )}
+                </div>
+                <span className={clsx('text-xs', isActive ? 'text-blue-electric font-semibold' : 'text-text-muted')}>
                   {label}
                 </span>
               </Link>

@@ -102,10 +102,15 @@ export default function SettingsPage() {
     if (!file) return;
     try {
       const res = await usersApi.uploadAvatar(file);
+      const newAvatarUrl = (res.data as any)?.avatar || (res.data as any);
       toast.success('Avatar updated!');
-      setUser({ ...user!, avatar: (res.data as any).avatar });
-    } catch {
-      toast.error('Avatar upload failed');
+      if (user && newAvatarUrl) {
+        setUser({ ...user, avatar: newAvatarUrl });
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      const errorMsg = Array.isArray(msg) ? msg[0] : msg || 'Avatar upload failed';
+      toast.error(errorMsg);
     }
   };
 

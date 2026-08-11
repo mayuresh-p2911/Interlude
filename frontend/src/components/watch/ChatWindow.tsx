@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
+import { ArrowLeftIcon, PaperAirplaneIcon } from '@heroicons/react/24/solid';
 import { getSocket } from '@/hooks/useSocket';
 import { useAuthStore } from '@/store/authStore';
-import { chatApi } from '@/lib/api';
+import { chatApi, usersApi } from '@/lib/api';
+import Image from 'next/image';
 
 interface Message {
   _id: string;
@@ -17,14 +18,16 @@ interface ChatWindowProps {
   sessionId?: string;
   groupId?: string;
   recipientId?: string;
+  onBack?: () => void;
 }
 
-export default function ChatWindow({ sessionId, groupId, recipientId }: ChatWindowProps) {
+export default function ChatWindow({ sessionId, groupId, recipientId, onBack }: ChatWindowProps) {
   const { user } = useAuthStore();
   const socket = getSocket();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState('');
+  const [recipientUser, setRecipientUser] = useState<{ username?: string; avatar?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,6 +39,9 @@ export default function ChatWindow({ sessionId, groupId, recipientId }: ChatWind
       chatApi.getDMs(recipientId).then((res) => {
         setMessages((res.data as { data: Message[] }).data ?? []);
       });
+      usersApi.getProfile(recipientId).then((res) => {
+        setRecipientUser(res.data as { username?: string; avatar?: string });
+      }).catch(() => {});
     }
   }, [groupId, recipientId]);
 
@@ -86,11 +92,35 @@ export default function ChatWindow({ sessionId, groupId, recipientId }: ChatWind
     }
   };
 
+  const headerTitle = recipientUser?.username ?? (groupId ? 'Group Chat' : 'Live Chat');
+
   return (
     <div className="flex flex-col h-full glass-navy rounded-3xl overflow-hidden border border-white/5">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <h3 className="font-bold text-white text-sm">Live Chat</h3>
-        <span className="text-xs text-text-muted">{messages.length} messages</span>
+      <div className="p-3.5 border-b border-white/5 flex items-center justify-between bg-surface-1/40">
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-1.5 rounded-xl hover:bg-white/10 text-text-secondary hover:text-white transition-colors"
+              title="Back"
+            >
+              <ArrowLeftIcon className="w-5 h-5" />
+            </button>
+          )}
+          {recipientUser?.avatar ? (
+            <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10">
+              <Image src={recipientUser.avatar} alt={headerTitle} fill className="object-cover" />
+            </div>
+          ) : recipientId ? (
+            <div className="w-8 h-8 rounded-full bg-blue-royal/30 border border-blue-electric/20 flex items-center justify-center font-bold text-xs text-white">
+              {headerTitle[0]?.toUpperCase()}
+            </div>
+          ) : null}
+          <div>
+            <h3 className="font-bold text-white text-sm">{headerTitle}</h3>
+            <span className="text-[10px] text-text-muted">{messages.length} messages</span>
+          </div>
+        </div>
       </div>
 
       {/* Messages */}
