@@ -162,7 +162,7 @@ export default function ProfilePage({ params }: { params: { username: string } }
         <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center font-black text-4xl text-white shrink-0 border-2 border-blue-electric/20 shadow-glass">
             {avatar ? (
-              <Image src={avatar} alt={username} fill className="object-cover" />
+              <Image src={avatar} alt={username} fill className="object-cover" unoptimized />
             ) : (
               username[0]?.toUpperCase()
             )}

@@ -167,6 +167,7 @@ export default function Navbar() {
                     alt={user.username}
                     fill
                     className="rounded-full object-cover"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-royal to-blue-electric rounded-full flex items-center justify-center">

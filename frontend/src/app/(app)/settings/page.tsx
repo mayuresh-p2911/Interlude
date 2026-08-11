@@ -199,7 +199,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-6 pb-6 border-b border-white/5">
             <div className="relative w-20 h-20 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-2xl font-black text-white shrink-0">
               {user?.avatar ? (
-                <Image src={user.avatar} alt={user.username} fill className="object-cover" />
+                <Image src={user.avatar} alt={user.username} fill className="object-cover" unoptimized />
               ) : (
                 user?.username?.[0]?.toUpperCase()
               )}

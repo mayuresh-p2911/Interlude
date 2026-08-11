@@ -109,7 +109,7 @@ export default function ChatWindow({ sessionId, groupId, recipientId, onBack }: 
           )}
           {recipientUser?.avatar ? (
             <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10">
-              <Image src={recipientUser.avatar} alt={headerTitle} fill className="object-cover" />
+              <Image src={recipientUser.avatar} alt={headerTitle} fill className="object-cover" unoptimized />
             </div>
           ) : recipientId ? (
             <div className="w-8 h-8 rounded-full bg-blue-royal/30 border border-blue-electric/20 flex items-center justify-center font-bold text-xs text-white">

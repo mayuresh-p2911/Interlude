@@ -74,7 +74,7 @@ export default function MessagesPage({ activeUserId }: { activeUserId?: string }
               >
                 {avatar ? (
                   <div className="relative w-9 h-9 rounded-full overflow-hidden border border-white/10 shrink-0">
-                    <Image src={avatar} alt={username} fill className="object-cover" />
+                    <Image src={avatar} alt={username} fill className="object-cover" unoptimized />
                   </div>
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-surface-3 flex items-center justify-center font-bold text-xs text-white shrink-0">
