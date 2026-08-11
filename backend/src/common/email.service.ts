@@ -61,8 +61,22 @@ export class EmailService implements OnModuleDestroy {
     this.transporter.close();
   }
 
+  private getAppUrl(): string {
+    const envUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      this.configService.get<string>('APP_URL') ||
+      this.configService.get<string>('NEXT_PUBLIC_APP_URL') ||
+      this.configService.get<string>('NEXT_PUBLIC_SITE_URL') ||
+      (this.configService.get<string>('VERCEL_URL')
+        ? `https://${this.configService.get<string>('VERCEL_URL')}`
+        : null);
+
+    const rawUrl = envUrl?.trim() || 'http://localhost:3000';
+    return rawUrl.replace(/\/+$/, '');
+  }
+
   async sendVerificationEmail(email: string, username: string, token: string) {
-    const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
+    const appUrl = this.getAppUrl();
     const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
 
     this.logger.log(`🔗 [VERIFICATION LINK FOR ${email}]: ${verificationUrl}`);
@@ -90,7 +104,7 @@ export class EmailService implements OnModuleDestroy {
   }
 
   async sendPasswordResetEmail(email: string, username: string, token: string) {
-    const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
+    const appUrl = this.getAppUrl();
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
 
     this.logger.log(`🔗 [RESET LINK FOR ${email}]: ${resetUrl}`);
@@ -144,7 +158,7 @@ export class EmailService implements OnModuleDestroy {
     movieTitle: string,
     sessionId: string,
   ) {
-    const appUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000';
+    const appUrl = this.getAppUrl();
     const sessionUrl = `${appUrl}/watch/${sessionId}`;
     await this.deliverMail({
       to: email,
