@@ -126,13 +126,14 @@ export default function Navbar() {
 
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="flex-1 max-w-xl">
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <div className="relative flex items-center">
+            <MagnifyingGlassIcon className="absolute left-3.5 w-4 h-4 text-text-muted pointer-events-none z-10" />
             <input
               id="navbar-search"
               type="search"
               placeholder="Search movies..."
-              className="input-field pl-10 py-2.5 text-sm"
+              className="input-field text-sm"
+              style={{ paddingLeft: '2.5rem' }}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -190,7 +191,7 @@ export default function Navbar() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -5 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 w-52 glass-navy rounded-2xl border border-white/8 overflow-hidden shadow-glass"
+                  className="absolute right-0 top-full mt-2 w-56 bg-[#081020] rounded-2xl border border-blue-electric/20 overflow-hidden shadow-2xl z-50"
                   onMouseLeave={() => setShowUserMenu(false)}
                 >
                   <div className="px-4 py-3 border-b border-white/5">

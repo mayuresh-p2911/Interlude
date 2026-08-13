@@ -95,10 +95,10 @@ body {
   }
 
   .glass-navy {
-    background: rgba(8, 27, 51, 0.6);
+    background: rgba(8, 16, 32, 0.98);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(37, 99, 235, 0.25);
   }
 
   /* Skeleton loading */
@@ -160,7 +160,10 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0.75rem;
     color: #F9FAFB;
-    padding: 0.875rem 1.125rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
     width: 100%;
     font-size: 0.9375rem;
     transition: all 0.2s ease;

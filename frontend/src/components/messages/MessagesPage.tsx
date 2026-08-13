@@ -85,6 +85,14 @@ export default function MessagesPage({ activeUserId }: { activeUserId?: string }
                   <h4 className="text-xs font-bold text-white truncate">{username}</h4>
                   <p className="text-[11px] text-text-muted truncate">{String(c.content ?? '')}</p>
                 </div>
+                <Link
+                  href={`/profile/${username}`}
+                  className="p-1.5 rounded-xl hover:bg-white/10 text-text-muted hover:text-white transition-colors text-[10px] font-semibold border border-white/5 whitespace-nowrap"
+                  title="View Profile"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Profile
+                </Link>
               </Link>
             );
           })

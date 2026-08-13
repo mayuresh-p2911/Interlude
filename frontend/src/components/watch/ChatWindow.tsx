@@ -6,6 +6,7 @@ import { getSocket } from '@/hooks/useSocket';
 import { useAuthStore } from '@/store/authStore';
 import { chatApi, usersApi } from '@/lib/api';
 import Image from 'next/image';
+import Link from 'next/link';
 
 interface Message {
   _id: string;
@@ -124,19 +125,31 @@ export default function ChatWindow({ sessionId, groupId, recipientId, onBack }: 
               <ArrowLeftIcon className="w-5 h-5" />
             </button>
           )}
-          {recipientUser?.avatar ? (
-            <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10">
-              <Image src={recipientUser.avatar} alt={headerTitle} fill className="object-cover" unoptimized />
+          {recipientUser?.username || recipientId ? (
+            <Link
+              href={`/profile/${recipientUser?.username || headerTitle}`}
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            >
+              {recipientUser?.avatar ? (
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10 shrink-0">
+                  <Image src={recipientUser.avatar} alt={headerTitle} fill className="object-cover" unoptimized />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-royal/30 border border-blue-electric/20 flex items-center justify-center font-bold text-xs text-white shrink-0">
+                  {headerTitle[0]?.toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h3 className="font-bold text-white text-sm hover:underline">{headerTitle}</h3>
+                <span className="text-[10px] text-text-muted">{messages.length} messages</span>
+              </div>
+            </Link>
+          ) : (
+            <div>
+              <h3 className="font-bold text-white text-sm">{headerTitle}</h3>
+              <span className="text-[10px] text-text-muted">{messages.length} messages</span>
             </div>
-          ) : recipientId ? (
-            <div className="w-8 h-8 rounded-full bg-blue-royal/30 border border-blue-electric/20 flex items-center justify-center font-bold text-xs text-white">
-              {headerTitle[0]?.toUpperCase()}
-            </div>
-          ) : null}
-          <div>
-            <h3 className="font-bold text-white text-sm">{headerTitle}</h3>
-            <span className="text-[10px] text-text-muted">{messages.length} messages</span>
-          </div>
+          )}
         </div>
       </div>
 
@@ -146,7 +159,12 @@ export default function ChatWindow({ sessionId, groupId, recipientId, onBack }: 
           const isMe = msg.sender._id === user?._id;
           return (
             <div key={msg._id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-              <span className="text-[10px] text-text-muted mb-0.5 px-1">{msg.sender.username}</span>
+              <Link
+                href={`/profile/${msg.sender.username}`}
+                className="text-[10px] text-text-muted mb-0.5 px-1 hover:text-blue-electric hover:underline transition-colors"
+              >
+                {msg.sender.username}
+              </Link>
               <div
                 className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-xs leading-relaxed ${
                   isMe

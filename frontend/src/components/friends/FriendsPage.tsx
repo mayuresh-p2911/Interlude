@@ -175,7 +175,12 @@ export default function FriendsPage() {
           ) : (
             searchResults.map((u) => (
               <div key={String(u._id)} className="flex items-center justify-between p-2">
-                <span className="text-sm font-bold text-white">{String(u.username)}</span>
+                <Link
+                  href={`/profile/${String(u.username)}`}
+                  className="text-sm font-bold text-white hover:text-blue-electric hover:underline transition-colors"
+                >
+                  {String(u.username)}
+                </Link>
                 {renderFriendButton(String(u._id))}
               </div>
             ))
@@ -210,25 +215,31 @@ export default function FriendsPage() {
           ) : (
             friends.map((f) => (
               <div key={String(f._id)} className="neo-card p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center font-bold text-white relative">
+                <Link
+                  href={`/profile/${String(f.username)}`}
+                  className="flex items-center gap-3 hover:opacity-80 transition-opacity flex-1 min-w-0"
+                >
+                  <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center font-bold text-white relative shrink-0">
                     {String(f.username ?? 'U')[0].toUpperCase()}
                     {f.onlineStatus === 'online' && (
                       <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black" />
                     )}
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{String(f.username)}</h4>
-                    <p className="text-xs text-text-muted capitalize">{String(f.onlineStatus ?? 'offline')}</p>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-white hover:underline truncate">{String(f.username)}</h4>
+                    <p className="text-xs text-text-muted capitalize truncate">{String(f.onlineStatus ?? 'offline')}</p>
                   </div>
-                </div>
-
-                <Link
-                  href={`/messages/${String(f._id)}`}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-blue-ice"
-                >
-                  <ChatBubbleLeftIcon className="w-4 h-4" />
                 </Link>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/messages/${String(f._id)}`}
+                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-blue-ice"
+                    title="Message"
+                  >
+                    <ChatBubbleLeftIcon className="w-4 h-4" />
+                  </Link>
+                </div>
               </div>
             ))
           )}
@@ -244,7 +255,12 @@ export default function FriendsPage() {
               const sender = (r.sender as Record<string, unknown>) ?? {};
               return (
                 <div key={String(r._id)} className="neo-card p-4 flex items-center justify-between">
-                  <span className="text-sm font-bold text-white">{String(sender.username)}</span>
+                  <Link
+                    href={`/profile/${String(sender.username)}`}
+                    className="text-sm font-bold text-white hover:text-blue-electric hover:underline transition-colors"
+                  >
+                    {String(sender.username)}
+                  </Link>
                   <div className="flex gap-2">
                     <button
                       onClick={() => acceptMutation.mutate(String(r._id))}
@@ -270,7 +286,12 @@ export default function FriendsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {suggestions.map((s) => (
             <div key={String(s._id)} className="neo-card p-4 flex items-center justify-between">
-              <span className="text-sm font-bold text-white">{String(s.username)}</span>
+              <Link
+                href={`/profile/${String(s.username)}`}
+                className="text-sm font-bold text-white hover:text-blue-electric hover:underline transition-colors truncate flex-1 mr-2"
+              >
+                {String(s.username)}
+              </Link>
               {renderFriendButton(String(s._id))}
             </div>
           ))}
