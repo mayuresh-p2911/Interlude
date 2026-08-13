@@ -38,7 +38,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Navbar />
       <div className="flex pt-16">
         <Sidebar />
-        <main className="flex-1 lg:ml-64 min-h-[calc(100vh-64px)] overflow-x-hidden">
+        <main className="flex-1 lg:ml-64 min-h-[calc(100vh-64px)] overflow-x-hidden pb-16 lg:pb-0">
           {children}
         </main>
       </div>

@@ -150,12 +150,13 @@ export class AuthController {
   }
 
   // ── Helper ────────────────────────────────────────────────────
-  private setRefreshCookie(res: Response, token: string, rememberMe = false) {
+  private setRefreshCookie(res: Response, token: string, rememberMe = true) {
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
+      path: '/',
       maxAge: rememberMe
         ? 30 * 24 * 60 * 60 * 1000 // 30 days
         : 7 * 24 * 60 * 60 * 1000, // 7 days

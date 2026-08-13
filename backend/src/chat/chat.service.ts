@@ -112,7 +112,8 @@ export class ChatService {
     if (blockedWords.length > 0 && typeof processedContent === 'string') {
       blockedWords.forEach((word) => {
         if (word) {
-          const regex = new RegExp(word, 'gi');
+          const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
           processedContent = processedContent.replace(regex, '*'.repeat(word.length));
         }
       });
