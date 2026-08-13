@@ -54,16 +54,33 @@ export default function ChatWindow({ sessionId, groupId, recipientId, onBack }: 
         setMessages((prev) => [...prev, msg]);
       });
     } else if (recipientId) {
-      socket.on('dm:receive', (msg: Message) => {
-        setMessages((prev) => [...prev, msg]);
-      });
+      const handleDM = (msg: Message & { recipient?: { _id?: string } | string }) => {
+        const senderId = String(msg.sender?._id ?? '');
+        const targetId = String((msg.recipient as { _id?: string })?._id ?? msg.recipient ?? '');
+        const currentUserId = String(user?._id ?? '');
+
+        const isFromPartner = senderId === recipientId;
+        const isToPartner = senderId === currentUserId && targetId === recipientId;
+
+        if (isFromPartner || isToPartner) {
+          setMessages((prev) => {
+            if (prev.some((m) => m._id === msg._id)) return prev;
+            return [...prev, msg];
+          });
+        }
+      };
+
+      socket.on('dm:receive', handleDM);
+
+      return () => {
+        socket.off('dm:receive', handleDM);
+      };
     }
 
     return () => {
       socket.off('group:message:receive');
-      socket.off('dm:receive');
     };
-  }, [socket, groupId, recipientId]);
+  }, [socket, groupId, recipientId, user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -34,16 +34,19 @@ async function bootstrap() {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
 
+      const isDev = process.env.NODE_ENV !== 'production';
+      const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+
       if (
         configuredOrigins.includes(origin) ||
+        configuredOrigins.includes('*') ||
         origin.endsWith('.vercel.app') ||
-        origin.includes('localhost') ||
-        configuredOrigins.includes('*')
+        (isDev && isLocalhost)
       ) {
         return callback(null, true);
       }
 
-      return callback(null, true);
+      return callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

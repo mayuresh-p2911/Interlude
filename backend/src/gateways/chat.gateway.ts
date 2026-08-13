@@ -48,9 +48,12 @@ export class ChatGateway extends BaseGateway {
       { movieRef: payload.movieRef },
     );
 
-    // Emit to both sender and recipient
-    this.server.to(`user:${socket.userId}`).emit('dm:receive', message);
-    this.server.to(`user:${payload.recipientId}`).emit('dm:receive', message);
+    const senderMessage = await this.chatService.formatMessageForUser(message, socket.userId);
+    const recipientMessage = await this.chatService.formatMessageForUser(message, payload.recipientId);
+
+    // Emit to both sender and recipient (filtered per viewer)
+    this.server.to(`user:${socket.userId}`).emit('dm:receive', senderMessage);
+    this.server.to(`user:${payload.recipientId}`).emit('dm:receive', recipientMessage);
 
     // Notify recipient
     await this.notificationsService.create({

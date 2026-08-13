@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { authApi } from '@/lib/api';
+import { authApi, onAccessTokenRefreshed } from '@/lib/api';
 
 interface AuthUser {
   _id: string;
@@ -146,3 +146,9 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+if (typeof window !== 'undefined') {
+  onAccessTokenRefreshed((newToken) => {
+    useAuthStore.getState().setToken(newToken);
+  });
+}

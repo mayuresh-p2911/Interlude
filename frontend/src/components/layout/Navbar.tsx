@@ -190,7 +190,7 @@ export default function Navbar() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -5 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 w-52 bg-[#0a1628]/98 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-black/50"
+                  className="absolute right-0 top-full mt-2 w-52 glass-navy rounded-2xl border border-white/8 overflow-hidden shadow-glass"
                   onMouseLeave={() => setShowUserMenu(false)}
                 >
                   <div className="px-4 py-3 border-b border-white/5">

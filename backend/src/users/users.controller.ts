@@ -15,7 +15,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
@@ -92,7 +91,7 @@ export class UsersController {
   @Post('me/avatar')
   @ApiOperation({ summary: 'Upload avatar' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('avatar', { storage: memoryStorage() }))
+  @UseInterceptors(FileInterceptor('avatar'))
   async uploadAvatar(
     @CurrentUser() user: AuthUser,
     @UploadedFile(

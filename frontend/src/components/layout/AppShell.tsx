@@ -13,16 +13,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isConnected } = useSocket();
 
   useEffect(() => {
-    const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('access_token');
-    if (!isAuthenticated && !hasToken) {
-      router.replace('/auth/login');
-      return;
+    let isMounted = true;
+    if (!isAuthenticated) {
+      fetchMe().catch(() => {
+        if (isMounted) {
+          router.replace('/auth/login');
+        }
+      });
     }
-    fetchMe().catch(() => {
-      if (typeof window !== 'undefined' && !localStorage.getItem('access_token')) {
-        router.replace('/auth/login');
-      }
-    });
+    return () => {
+      isMounted = false;
+    };
   }, [isAuthenticated, fetchMe, router]);
 
   if (!isAuthenticated) {
@@ -38,7 +39,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Navbar />
       <div className="flex pt-16">
         <Sidebar />
-        <main className="flex-1 lg:ml-64 min-h-[calc(100vh-64px)] overflow-x-hidden pb-16 lg:pb-0">
+        <main className="flex-1 lg:ml-64 min-h-[calc(100vh-64px)] overflow-x-hidden">
           {children}
         </main>
       </div>

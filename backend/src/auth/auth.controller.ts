@@ -26,7 +26,7 @@ import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 
 interface RequestWithUser extends Request {
-  user: AuthUser & { refreshToken?: string };
+  user: AuthUser & { refreshToken?: string; rememberMe?: boolean };
 }
 
 @ApiTags('Auth')
@@ -94,8 +94,9 @@ export class AuthController {
   async refresh(@Req() req: RequestWithUser, @Res({ passthrough: true }) res: Response) {
     const userId = req.user._id;
     const refreshToken = req.user.refreshToken ?? '';
-    const tokens = await this.authService.refreshTokens(userId, refreshToken);
-    this.setRefreshCookie(res, tokens.refreshToken);
+    const rememberMe = !!req.user.rememberMe;
+    const tokens = await this.authService.refreshTokens(userId, refreshToken, rememberMe);
+    this.setRefreshCookie(res, tokens.refreshToken, rememberMe);
     return { accessToken: tokens.accessToken };
   }
 
@@ -150,16 +151,13 @@ export class AuthController {
   }
 
   // ── Helper ────────────────────────────────────────────────────
-  private setRefreshCookie(res: Response, token: string, rememberMe = true) {
+  private setRefreshCookie(res: Response, token: string, rememberMe = false) {
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
-      path: '/',
-      maxAge: rememberMe
-        ? 30 * 24 * 60 * 60 * 1000 // 30 days
-        : 7 * 24 * 60 * 60 * 1000, // 7 days
+      ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
     });
   }
 }

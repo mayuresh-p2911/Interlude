@@ -30,6 +30,25 @@ let refreshSubscribers: Array<{
   reject: (err: unknown) => void;
 }> = [];
 
+type TokenRefreshListener = (newToken: string) => void;
+const refreshListeners: TokenRefreshListener[] = [];
+
+export function onAccessTokenRefreshed(listener: TokenRefreshListener) {
+  refreshListeners.push(listener);
+  return () => {
+    const idx = refreshListeners.indexOf(listener);
+    if (idx !== -1) refreshListeners.splice(idx, 1);
+  };
+}
+
+function notifyTokenRefreshed(newToken: string) {
+  refreshListeners.forEach((fn) => {
+    try {
+      fn(newToken);
+    } catch {}
+  });
+}
+
 function onTokenRefreshed(token: string) {
   refreshSubscribers.forEach((sub) => sub.resolve(token));
   refreshSubscribers = [];
@@ -83,6 +102,7 @@ api.interceptors.response.use(
         const response = await api.post<{ accessToken: string }>('/auth/refresh');
         const { accessToken } = response.data;
         localStorage.setItem('access_token', accessToken);
+        notifyTokenRefreshed(accessToken);
         onTokenRefreshed(accessToken);
         isRefreshing = false;
 

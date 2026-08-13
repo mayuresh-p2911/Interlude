@@ -424,7 +424,7 @@ export class AuthService {
       onlineStatus: 'online',
     });
 
-    const tokens = await this.generateTokens(user);
+    const tokens = await this.generateTokens(user, login.rememberMe);
     const hashedRefresh = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
     await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedRefresh });
 
@@ -532,7 +532,7 @@ export class AuthService {
   }
 
   // ── Refresh Tokens ────────────────────────────────────────────
-  async refreshTokens(userId: string, refreshToken: string) {
+  async refreshTokens(userId: string, refreshToken: string, rememberMe = false) {
     const user = await this.userModel.findById(userId).select('+refreshToken');
     if (!user?.refreshToken) {
       throw new UnauthorizedException('Access denied');
@@ -550,7 +550,7 @@ export class AuthService {
       throw new UnauthorizedException('Access denied — invalid refresh token');
     }
 
-    const tokens = await this.generateTokens(user);
+    const tokens = await this.generateTokens(user, rememberMe);
     const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
     await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
     return tokens;
@@ -643,12 +643,13 @@ export class AuthService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────
-  private async generateTokens(user: UserDocument) {
+  private async generateTokens(user: UserDocument, rememberMe = false) {
     const payload = {
       sub: user._id.toString(),
       username: user.username,
       email: user.email,
       isAdmin: user.isAdmin,
+      rememberMe: !!rememberMe,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -658,7 +659,9 @@ export class AuthService {
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d',
+        expiresIn: rememberMe
+          ? '30d'
+          : (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d'),
       }),
     ]);
 

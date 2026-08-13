@@ -28,11 +28,7 @@ export class UsersService {
   ) {}
 
   async findByUsername(username: string, requestingUserId?: string) {
-    // Support lookup by ObjectId as well as username
-    let user = await this.userModel.findOne({ username, isBlocked: false });
-    if (!user && Types.ObjectId.isValid(username)) {
-      user = await this.userModel.findOne({ _id: new Types.ObjectId(username), isBlocked: false });
-    }
+    const user = await this.userModel.findOne({ username, isBlocked: false });
     if (!user) throw new NotFoundException('User not found');
 
     const targetSettings = await this.settingsModel.findOne({ userId: user._id });

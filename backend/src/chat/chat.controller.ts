@@ -19,7 +19,7 @@ export class ChatController {
 
   @Get('conversations')
   @ApiOperation({ summary: 'Get all DM conversations' })
-  async getConversations(@CurrentUser() user: AuthUser) {
+  async getConversations(@CurrentUser() user: AuthUser): Promise<any[]> {
     return this.chatService.getConversations(user._id);
   }
 
@@ -30,7 +30,7 @@ export class ChatController {
     @Param('userId') userId: string,
     @Query('page') page = 1,
     @Query('limit') limit = 50,
-  ) {
+  ): Promise<{ data: any[]; total: number; page: number; limit: number; hasMore: boolean }> {
     return this.chatService.getDirectMessages(user._id, userId, Number(page), Number(limit));
   }
 

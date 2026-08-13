@@ -23,20 +23,31 @@ export function useSocket() {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
       });
+    } else {
+      const currentToken = (socketInstance.auth as { token?: string })?.token;
+      if (currentToken !== accessToken) {
+        socketInstance.auth = { token: accessToken };
+        if (socketInstance.connected) {
+          socketInstance.disconnect().connect();
+        }
+      }
     }
 
     const socket = socketInstance;
 
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
+    const handleConnect = () => setIsConnected(true);
+    const handleDisconnect = () => setIsConnected(false);
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
     if (!socket.connected) {
       socket.connect();
     }
 
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
     };
   }, [isAuthenticated, accessToken]);
 
