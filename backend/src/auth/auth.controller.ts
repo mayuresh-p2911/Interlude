@@ -61,11 +61,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify 2FA code sent to email' })
   async verifyTwoFactor(
+    @Req() req: Request,
     @Body() dto: VerifyTwoFactorDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyTwoFactor(dto.tempToken, dto.code);
-    this.setRefreshCookie(res, result.tokens.refreshToken, result.rememberMe);
+    this.setRefreshCookie(req, res, result.tokens.refreshToken, result.rememberMe);
     return { user: result.user, accessToken: result.tokens.accessToken };
   }
 
@@ -81,8 +82,18 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current user' })
   @ApiBearerAuth()
-  async logout(@CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+  async logout(@CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(user._id);
+    const origin = (req.headers['origin'] as string) || (req.headers['referer'] as string) || '';
+    const isProd = process.env.NODE_ENV === 'production' || origin.includes('vercel.app');
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || origin.startsWith('https://');
+    const useSecureCookie = isProd || isHttps;
+
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: useSecureCookie,
+      sameSite: useSecureCookie ? 'none' : 'lax',
+    });
     res.clearCookie('refresh_token');
     return { message: 'Logged out successfully' };
   }
@@ -96,7 +107,7 @@ export class AuthController {
     const refreshToken = req.user.refreshToken ?? '';
     const rememberMe = !!req.user.rememberMe;
     const tokens = await this.authService.refreshTokens(userId, refreshToken, rememberMe);
-    this.setRefreshCookie(res, tokens.refreshToken, rememberMe);
+    this.setRefreshCookie(req, res, tokens.refreshToken, rememberMe);
     return { accessToken: tokens.accessToken };
   }
 
@@ -151,12 +162,16 @@ export class AuthController {
   }
 
   // ── Helper ────────────────────────────────────────────────────
-  private setRefreshCookie(res: Response, token: string, rememberMe = false) {
-    const isProd = process.env.NODE_ENV === 'production';
+  private setRefreshCookie(req: Request, res: Response, token: string, rememberMe = false) {
+    const origin = (req.headers['origin'] as string) || (req.headers['referer'] as string) || '';
+    const isProd = process.env.NODE_ENV === 'production' || origin.includes('vercel.app');
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || origin.startsWith('https://');
+    const useSecureCookie = isProd || isHttps;
+
     res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
+      secure: useSecureCookie,
+      sameSite: useSecureCookie ? 'none' : 'lax',
       ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
     });
   }
