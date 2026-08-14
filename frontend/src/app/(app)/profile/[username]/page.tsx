@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi, friendsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
 import {
   Cog6ToothIcon,
@@ -15,6 +17,7 @@ import {
   CalendarIcon,
   UserPlusIcon,
   CheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 function ProfileFriendButton({ targetUserId }: { targetUserId: string }) {
@@ -127,6 +130,10 @@ function ProfileFriendButton({ targetUserId }: { targetUserId: string }) {
 
 export default function ProfilePage({ params }: { params: { username: string } }) {
   const { user: currentUser } = useAuthStore();
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [userFriends, setUserFriends] = useState<Record<string, unknown>[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['profile', params.username],
     queryFn: () => usersApi.getProfile(params.username),
@@ -154,6 +161,20 @@ export default function ProfilePage({ params }: { params: { username: string } }
   const onlineStatus = String(profile.onlineStatus ?? 'offline');
   const currentActivity = profile.currentActivity as { type?: string; movieTitle?: string } | null;
   const joinedAt = profile.joinedAt ? new Date(String(profile.joinedAt)).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+  const handleOpenFriends = async () => {
+    if (friendsCount === null) return;
+    setShowFriendsModal(true);
+    setLoadingFriends(true);
+    try {
+      const res = await usersApi.getUserFriends(username);
+      setUserFriends((res.data as Record<string, unknown>[]) || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-8">
@@ -219,11 +240,21 @@ export default function ProfilePage({ params }: { params: { username: string } }
 
       {/* Info Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Friends Info */}
-        <div className="neo-card p-6 space-y-3">
-          <div className="flex items-center gap-2 text-white font-bold text-base">
-            <UserGroupIcon className="w-5 h-5 text-blue-electric" />
-            <span>Friends</span>
+        {/* Friends Info Card */}
+        <div
+          onClick={handleOpenFriends}
+          className={`neo-card p-6 space-y-3 transition-all ${
+            friendsCount !== null ? 'cursor-pointer hover:border-blue-electric/40 hover:scale-[1.01]' : ''
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-white font-bold text-base">
+              <UserGroupIcon className="w-5 h-5 text-blue-electric" />
+              <span>Friends</span>
+            </div>
+            {friendsCount !== null && (
+              <span className="text-xs text-blue-electric font-semibold hover:underline">View All →</span>
+            )}
           </div>
           {friendsCount !== null ? (
             <p className="text-2xl font-black text-white">
@@ -250,6 +281,72 @@ export default function ProfilePage({ params }: { params: { username: string } }
           )}
         </div>
       </div>
+
+      {/* Friends List Modal */}
+      <AnimatePresence>
+        {showFriendsModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-[#081020] rounded-3xl border border-white/10 p-6 space-y-4 shadow-2xl relative"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <UserGroupIcon className="w-5 h-5 text-blue-electric" />
+                  {username}'s Friends ({userFriends.length})
+                </h3>
+                <button
+                  onClick={() => setShowFriendsModal(false)}
+                  className="p-1 rounded-xl hover:bg-white/10 text-text-muted hover:text-white transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
+                {loadingFriends ? (
+                  <div className="py-8 text-center text-text-muted text-sm animate-pulse">Loading friends...</div>
+                ) : userFriends.length === 0 ? (
+                  <div className="py-8 text-center text-text-muted text-sm">No friends to show</div>
+                ) : (
+                  userFriends.map((f) => {
+                    const friendUsername = String(f.username ?? '');
+                    const friendAvatar = f.avatar ? String(f.avatar) : '';
+                    const friendStatus = String(f.onlineStatus ?? 'offline');
+                    return (
+                      <Link
+                        key={String(f._id)}
+                        href={`/profile/${friendUsername}`}
+                        onClick={() => setShowFriendsModal(false)}
+                        className="flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          {friendAvatar ? (
+                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10">
+                              <Image src={friendAvatar} alt={friendUsername} fill className="object-cover" unoptimized />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-blue-royal/30 border border-blue-electric/20 flex items-center justify-center font-bold text-sm text-white">
+                              {friendUsername[0]?.toUpperCase() ?? 'U'}
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="text-sm font-bold text-white hover:underline">{friendUsername}</h4>
+                            <p className="text-xs text-text-muted capitalize">{friendStatus}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-blue-ice hover:text-white font-medium">View Profile →</span>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

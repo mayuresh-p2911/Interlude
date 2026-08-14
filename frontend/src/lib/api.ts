@@ -158,6 +158,7 @@ export const authApi = {
 
 export const usersApi = {
   getProfile: (username: string) => api.get(`/users/${username}`),
+  getUserFriends: (username: string) => api.get(`/users/${username}/friends`),
   updateProfile: (data: { username?: string; bio?: string; pronouns?: string; customStatusText?: string }) =>
     api.patch('/users/me', data),
   uploadAvatar: (file: File) => {

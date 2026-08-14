@@ -27,8 +27,14 @@ export class UsersService {
     private uploadService: UploadService,
   ) {}
 
-  async findByUsername(username: string, requestingUserId?: string) {
-    const user = await this.userModel.findOne({ username, isBlocked: false });
+  async findByUsername(usernameOrId: string, requestingUserId?: string) {
+    let user = null;
+    if (Types.ObjectId.isValid(usernameOrId)) {
+      user = await this.userModel.findOne({ _id: new Types.ObjectId(usernameOrId), isBlocked: false });
+    }
+    if (!user) {
+      user = await this.userModel.findOne({ username: usernameOrId, isBlocked: false });
+    }
     if (!user) throw new NotFoundException('User not found');
 
     const targetSettings = await this.settingsModel.findOne({ userId: user._id });
