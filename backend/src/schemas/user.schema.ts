@@ -56,6 +56,12 @@ export class User {
   refreshToken: string | null;
 
   @Prop({ type: String, default: null, select: false })
+  previousRefreshToken: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  previousRefreshTokenExpiresAt: Date | null;
+
+  @Prop({ type: String, default: null, select: false })
   emailVerificationToken: string | null;
 
   @Prop({ type: Date, default: null, select: false })

@@ -533,17 +533,31 @@ export class AuthService {
 
   // ── Refresh Tokens ────────────────────────────────────────────
   async refreshTokens(userId: string, refreshToken: string, rememberMe = false) {
-    const user = await this.userModel.findById(userId).select('+refreshToken');
-    if (!user?.refreshToken) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('+refreshToken +previousRefreshToken +previousRefreshTokenExpiresAt');
+    if (!user?.refreshToken && !user?.previousRefreshToken) {
       throw new UnauthorizedException('Access denied');
     }
 
+    const currentHash = refreshToken ? crypto.createHash('sha256').update(refreshToken).digest('hex') : '';
     let tokenMatch = false;
-    if (user.refreshToken.startsWith('$2a$') || user.refreshToken.startsWith('$2b$')) {
-      tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
-    } else {
-      const hashed = crypto.createHash('sha256').update(refreshToken).digest('hex');
-      tokenMatch = hashed === user.refreshToken;
+
+    if (user.refreshToken) {
+      if (user.refreshToken.startsWith('$2a$') || user.refreshToken.startsWith('$2b$')) {
+        tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+      } else {
+        tokenMatch = currentHash === user.refreshToken;
+      }
+    }
+
+    // Grace period check for concurrent requests during token rotation
+    if (!tokenMatch && user.previousRefreshToken && user.previousRefreshTokenExpiresAt && user.previousRefreshTokenExpiresAt > new Date()) {
+      if (user.previousRefreshToken.startsWith('$2a$') || user.previousRefreshToken.startsWith('$2b$')) {
+        tokenMatch = await bcrypt.compare(refreshToken, user.previousRefreshToken);
+      } else {
+        tokenMatch = currentHash === user.previousRefreshToken;
+      }
     }
 
     if (!tokenMatch) {
@@ -551,8 +565,13 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user, rememberMe);
-    const hashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
-    await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
+    const newHashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      previousRefreshToken: user.refreshToken,
+      previousRefreshTokenExpiresAt: new Date(Date.now() + 60 * 1000), // 60-second grace period for parallel requests
+      refreshToken: newHashedToken,
+    });
     return tokens;
   }
 
@@ -578,59 +597,50 @@ export class AuthService {
     const resetToken = uuidv4();
     const resetExpiry = new Date(Date.now() + 60 * 60 * 1000);
 
-    await this.userModel.findByIdAndUpdate(user._id, {
-      passwordResetToken: resetToken,
-      passwordResetExpiry: resetExpiry,
-    });
+    user.passwordResetToken = resetToken;
+    user.passwordResetExpiry = resetExpiry;
+    await user.save();
 
-    const targetEmail = cleanEmail || user.email;
-    await this.sendResetPasswordEmail(targetEmail, user.username, resetToken, origin);
+    await this.sendResetPasswordEmail(user.email, user.username, resetToken, origin);
 
     return { message: 'If that email exists, a reset link has been sent' };
   }
 
   // ── Reset Password ────────────────────────────────────────────
   async resetPassword(dto: ResetPasswordDto) {
-    const user = await this.userModel
-      .findOne({
-        passwordResetToken: dto.token,
-        passwordResetExpiry: { $gt: new Date() },
-      })
-      .select('+passwordResetToken +passwordResetExpiry');
+    const user = await this.userModel.findOne({
+      passwordResetToken: dto.token,
+      passwordResetExpiry: { $gt: new Date() },
+    });
 
     if (!user) {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
-    await this.userModel.findByIdAndUpdate(user._id, {
-      password: hashedPassword,
-      passwordResetToken: null,
-      passwordResetExpiry: null,
-      refreshToken: null,
-    });
+    user.password = hashedPassword;
+    user.passwordResetToken = null;
+    user.passwordResetExpiry = null;
+    await user.save();
 
     return { message: 'Password reset successfully' };
   }
 
   // ── Verify Email ─────────────────────────────────────────────
   async verifyEmail(token: string) {
-    const user = await this.userModel
-      .findOne({
-        emailVerificationToken: token,
-        emailVerificationExpiry: { $gt: new Date() },
-      })
-      .select('+emailVerificationToken +emailVerificationExpiry');
+    const user = await this.userModel.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpiry: { $gt: new Date() },
+    });
 
     if (!user) {
       throw new BadRequestException('Invalid or expired verification token');
     }
 
-    await this.userModel.findByIdAndUpdate(user._id, {
-      isVerified: true,
-      emailVerificationToken: null,
-      emailVerificationExpiry: null,
-    });
+    user.isVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpiry = null;
+    await user.save();
 
     return { message: 'Email verified successfully' };
   }
@@ -655,7 +665,7 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
+        expiresIn: rememberMe ? '30d' : (this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m'),
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
