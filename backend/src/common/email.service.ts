@@ -75,7 +75,7 @@ export class EmailService implements OnModuleDestroy {
         ? `https://${this.configService.get<string>('VERCEL_URL')}`
         : null);
 
-    const rawUrl = envUrl?.trim() || 'http://localhost:3000';
+    const rawUrl = envUrl?.trim() || 'https://interlude-gray.vercel.app';
     return rawUrl.replace(/\/+$/, '');
   }
 

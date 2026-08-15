@@ -34,22 +34,8 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-
-      const cleanOrigin = origin.replace(/\/+$/, '');
-      const isDev = process.env.NODE_ENV !== 'production';
-      const isLocalhost = cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1');
-
-      if (
-        configuredOrigins.includes(cleanOrigin) ||
-        configuredOrigins.includes('*') ||
-        cleanOrigin.endsWith('.vercel.app') ||
-        (isDev && isLocalhost)
-      ) {
-        return callback(null, true);
-      }
-
-      return callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
+      // Dynamically echo requesting origin to support main domain, custom domains, and Vercel
+      return callback(null, origin || true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -101,8 +87,7 @@ async function bootstrap() {
 
   await app.listen(port);
 
-  console.log(`🎬 INTERLUDE Backend running on http://localhost:${port}/api`);
-  console.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
+  console.log(`🎬 INTERLUDE Backend running on port ${port}`);
 }
 
 bootstrap();
