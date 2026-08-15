@@ -6,10 +6,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Settings, SettingsSchema } from '../schemas/settings.schema';
+import { AuthSession, AuthSessionSchema } from '../schemas/auth-session.schema';
 import { CommonModule } from '../common/common.module';
 
 @Module({
@@ -17,6 +17,7 @@ import { CommonModule } from '../common/common.module';
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Settings.name, schema: SettingsSchema },
+      { name: AuthSession.name, schema: AuthSessionSchema },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
@@ -26,7 +27,6 @@ import { CommonModule } from '../common/common.module';
   providers: [
     AuthService,
     JwtStrategy,
-    JwtRefreshStrategy,
     // Apply JWT guard globally
     {
       provide: APP_GUARD,

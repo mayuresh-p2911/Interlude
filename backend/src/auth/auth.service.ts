@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcryptjs';
@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserDocument } from '../schemas/user.schema';
 import { Settings, SettingsDocument } from '../schemas/settings.schema';
+import { AuthSession, AuthSessionDocument } from '../schemas/auth-session.schema';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { EmailService } from '../common/email.service';
@@ -50,6 +51,7 @@ export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Settings.name) private settingsModel: Model<SettingsDocument>,
+    @InjectModel(AuthSession.name) private authSessionModel: Model<AuthSessionDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
@@ -369,15 +371,15 @@ export class AuthService {
         await this.settingsModel.create({ userId: user._id });
       }
 
-      const tokens = await this.generateTokens(user);
-      const hashedRefresh = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
-      await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedRefresh });
+      const accessToken = await this.generateAccessJwt(user);
+      const session = await this.createAuthSession(user._id.toString(), false);
 
       const updatedUser = await this.userModel.findById(user._id);
 
       return {
         user: this.sanitizeUser(updatedUser!),
-        tokens,
+        accessToken,
+        sessionToken: session.rawToken,
         rememberMe: false,
       };
     }
@@ -387,7 +389,7 @@ export class AuthService {
 
     const user = await this.userModel
       .findById(login.sub)
-      .select('+twoFactorCode +twoFactorExpiry +refreshToken +otpAttempts');
+      .select('+twoFactorCode +twoFactorExpiry +otpAttempts');
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -424,15 +426,15 @@ export class AuthService {
       onlineStatus: 'online',
     });
 
-    const tokens = await this.generateTokens(user, login.rememberMe);
-    const hashedRefresh = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
-    await this.userModel.findByIdAndUpdate(user._id, { refreshToken: hashedRefresh });
+    const accessToken = await this.generateAccessJwt(user);
+    const session = await this.createAuthSession(user._id.toString(), login.rememberMe);
 
     const updatedUser = await this.userModel.findById(user._id);
 
     return {
       user: this.sanitizeUser(updatedUser!),
-      tokens,
+      accessToken,
+      sessionToken: session.rawToken,
       rememberMe: login.rememberMe,
     };
   }
@@ -522,70 +524,116 @@ export class AuthService {
   }
 
   // ── Logout ───────────────────────────────────────────────────
-  async logout(userId: string) {
-    await this.userModel.findByIdAndUpdate(userId, {
-      refreshToken: null,
-      onlineStatus: 'offline',
-      lastSeen: new Date(),
-    });
+  async logout(userId: string, rawToken?: string) {
+    if (rawToken) {
+      await this.revokeSession(rawToken);
+    }
+    if (userId) {
+      await this.userModel.findByIdAndUpdate(userId, {
+        onlineStatus: 'offline',
+        lastSeen: new Date(),
+      });
+    }
     return { message: 'Logged out successfully' };
   }
 
-  // ── Refresh Tokens ────────────────────────────────────────────
-  async refreshTokens(userId: string, refreshToken: string, rememberMe = false) {
+  // ── AuthSession Operations ──────────────────────────────────
+  private generateSessionToken(): string {
+    return crypto.randomBytes(64).toString('base64url');
+  }
+
+  private hashSessionToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  async createAuthSession(userId: string, rememberMe = false) {
+    const rawToken = this.generateSessionToken();
+    const tokenHash = this.hashSessionToken(rawToken);
+
+    await this.authSessionModel.create({
+      userId: new Types.ObjectId(userId),
+      tokenHash,
+      rememberMe: !!rememberMe,
+      lastUsedAt: new Date(),
+      expiresAt: rememberMe ? null : new Date(Date.now() + 24 * 60 * 60 * 1000),
+      revokedAt: null,
+    });
+
+    return { rawToken, rememberMe: !!rememberMe };
+  }
+
+  async generateAccessJwt(user: UserDocument) {
+    const payload = {
+      sub: user._id.toString(),
+      username: user.username,
+      email: user.email,
+      isAdmin: user.isAdmin,
+    };
+
+    return this.jwtService.signAsync(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
+    });
+  }
+
+  async refreshSession(rawToken: string) {
+    if (!rawToken) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (missing cookie)');
+      throw new UnauthorizedException('Refresh token missing');
+    }
+
+    const tokenHash = this.hashSessionToken(rawToken);
+    const session = await this.authSessionModel.findOne({ tokenHash });
+
+    if (!session) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (session not found)');
+      throw new UnauthorizedException('Access denied — invalid session');
+    }
+
+    if (session.revokedAt) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (session revoked)');
+      throw new UnauthorizedException('Access denied — session revoked');
+    }
+
+    if (session.expiresAt && session.expiresAt < new Date()) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (session expired)');
+      throw new UnauthorizedException('Access denied — session expired');
+    }
+
+    const user = await this.userModel.findById(session.userId);
+    if (!user || user.isBlocked) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (user unavailable)');
+      throw new UnauthorizedException('Access denied — user unavailable');
+    }
+
+    // Session token rotation: generate new token, update hash in DB
+    const newRawToken = this.generateSessionToken();
+    const newHash = this.hashSessionToken(newRawToken);
+
+    session.tokenHash = newHash;
+    session.lastUsedAt = new Date();
+    await session.save();
+
+    const accessToken = await this.generateAccessJwt(user);
+
     this.logger.log(
-      `[AUTH_REFRESH] cookiePresent: ${!!refreshToken} jwtPayloadUserId: ${userId} rememberMe: ${rememberMe}`,
+      `[AUTH_REFRESH] refreshSuccessful: true userId: ${user._id} rememberMe: ${session.rememberMe}`,
     );
 
-    const user = await this.userModel
-      .findById(userId)
-      .select('+refreshToken +previousRefreshToken +previousRefreshTokenExpiresAt');
+    return {
+      accessToken,
+      newSessionToken: newRawToken,
+      rememberMe: session.rememberMe,
+    };
+  }
 
-    const dbTokenPresent = !!user?.refreshToken || !!user?.previousRefreshToken;
-    this.logger.log(`[AUTH_REFRESH] databaseRefreshTokenPresent: ${dbTokenPresent}`);
-
-    if (!user?.refreshToken && !user?.previousRefreshToken) {
-      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (no token in DB)');
-      throw new UnauthorizedException('Access denied');
-    }
-
-    const currentHash = refreshToken ? crypto.createHash('sha256').update(refreshToken).digest('hex') : '';
-    let tokenMatch = false;
-
-    if (user.refreshToken) {
-      if (user.refreshToken.startsWith('$2a$') || user.refreshToken.startsWith('$2b$')) {
-        tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
-      } else {
-        tokenMatch = currentHash === user.refreshToken;
-      }
-    }
-
-    // Grace period check for concurrent requests during token rotation
-    if (!tokenMatch && user.previousRefreshToken && user.previousRefreshTokenExpiresAt && user.previousRefreshTokenExpiresAt > new Date()) {
-      if (user.previousRefreshToken.startsWith('$2a$') || user.previousRefreshToken.startsWith('$2b$')) {
-        tokenMatch = await bcrypt.compare(refreshToken, user.previousRefreshToken);
-      } else {
-        tokenMatch = currentHash === user.previousRefreshToken;
-      }
-    }
-
-    this.logger.log(`[AUTH_REFRESH] refreshTokenHashMatches: ${tokenMatch}`);
-
-    if (!tokenMatch) {
-      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (hash mismatch)');
-      throw new UnauthorizedException('Access denied — invalid refresh token');
-    }
-
-    const tokens = await this.generateTokens(user, rememberMe);
-    const newHashedToken = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex');
-
-    await this.userModel.findByIdAndUpdate(userId, {
-      previousRefreshToken: user.refreshToken,
-      previousRefreshTokenExpiresAt: new Date(Date.now() + 60 * 1000), // 60-second grace period for parallel requests
-      refreshToken: newHashedToken,
-    });
-    this.logger.log('[AUTH_REFRESH] refreshSuccessful: true');
-    return tokens;
+  async revokeSession(rawToken: string) {
+    if (!rawToken) return;
+    const tokenHash = this.hashSessionToken(rawToken);
+    await this.authSessionModel.updateOne(
+      { tokenHash },
+      { revokedAt: new Date() },
+    );
   }
 
   // ── Forgot Password ───────────────────────────────────────────
@@ -665,41 +713,9 @@ export class AuthService {
     return this.sanitizeUser(user);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────
-  private async generateTokens(user: UserDocument, rememberMe = false) {
-    const payload = {
-      sub: user._id.toString(),
-      username: user.username,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      rememberMe: !!rememberMe,
-    };
-
-    const refreshSecret =
-      this.configService.get<string>('JWT_REFRESH_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'default_secret';
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: refreshSecret,
-        expiresIn: rememberMe
-          ? '365d'
-          : (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '1d'),
-      }),
-    ]);
-
-    return { accessToken, refreshToken };
-  }
-
   private sanitizeUser(user: UserDocument) {
     const obj = user.toObject();
     delete obj.password;
-    delete obj.refreshToken;
     delete obj.emailVerificationToken;
     delete obj.emailVerificationExpiry;
     delete obj.passwordResetToken;

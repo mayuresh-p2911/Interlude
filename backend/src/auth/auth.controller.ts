@@ -5,7 +5,6 @@ import {
   Body,
   Res,
   Req,
-  UseGuards,
   HttpCode,
   HttpStatus,
   Logger,
@@ -22,13 +21,8 @@ import {
   VerifyTwoFactorDto,
   ResendTwoFactorDto,
 } from './dto/auth.dto';
-import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
-
-interface RequestWithUser extends Request {
-  user: AuthUser & { refreshToken?: string; rememberMe?: boolean };
-}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -69,8 +63,8 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyTwoFactor(dto.tempToken, dto.code);
-    this.setRefreshCookie(req, res, result.tokens.refreshToken, result.rememberMe);
-    return { user: result.user, accessToken: result.tokens.accessToken };
+    this.setRefreshCookie(req, res, result.sessionToken, result.rememberMe);
+    return { user: result.user, accessToken: result.accessToken };
   }
 
   @Public()
@@ -81,12 +75,15 @@ export class AuthController {
     return this.authService.resendTwoFactor(dto.tempToken);
   }
 
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current user' })
-  @ApiBearerAuth()
-  async logout(@CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.authService.logout(user._id);
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const rawToken = (req.cookies?.['refresh_token'] as string) ?? '';
+    if (rawToken) {
+      await this.authService.revokeSession(rawToken);
+    }
     const origin = (req.headers['origin'] as string) || (req.headers['referer'] as string) || '';
     const isProd = process.env.NODE_ENV === 'production' || origin.includes('vercel.app');
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || origin.startsWith('https://');
@@ -101,17 +98,15 @@ export class AuthController {
     return { message: 'Logged out successfully' };
   }
 
-  @UseGuards(JwtRefreshGuard)
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  async refresh(@Req() req: RequestWithUser, @Res({ passthrough: true }) res: Response) {
-    const userId = req.user._id;
-    const refreshToken = req.user.refreshToken ?? '';
-    const rememberMe = !!req.user.rememberMe;
-    const tokens = await this.authService.refreshTokens(userId, refreshToken, rememberMe);
-    this.setRefreshCookie(req, res, tokens.refreshToken, rememberMe);
-    return { accessToken: tokens.accessToken };
+  @ApiOperation({ summary: 'Refresh access token using session cookie' })
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const rawToken = (req.cookies?.['refresh_token'] as string) ?? '';
+    const result = await this.authService.refreshSession(rawToken);
+    this.setRefreshCookie(req, res, result.newSessionToken, result.rememberMe);
+    return { accessToken: result.accessToken };
   }
 
   @Public()
