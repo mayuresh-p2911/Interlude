@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -18,12 +18,36 @@ const passwordRequirements = [
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, isLoading } = useAuthStore();
+  const { isAuthenticated, isInitializing, initializeAuth, register, isLoading } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [age, setAge] = useState<number | ''>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    } else {
+      const unsub = useAuthStore.persist.onFinishHydration(() => {
+        setIsHydrated(true);
+      });
+      return () => unsub();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    initializeAuth();
+  }, [isHydrated, initializeAuth]);
+
+  useEffect(() => {
+    if (!isHydrated || isInitializing) return;
+    if (isAuthenticated) {
+      router.replace('/home');
+    }
+  }, [isHydrated, isInitializing, isAuthenticated, router]);
 
   // Field Error States
   const [usernameError, setUsernameError] = useState('');

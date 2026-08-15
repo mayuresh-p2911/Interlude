@@ -12,6 +12,8 @@ import {
   DevicePhoneMobileIcon,
 } from '@heroicons/react/24/outline';
 
+import { useAuthStore } from '@/store/authStore';
+
 const features = [
   {
     icon: UserPlusIcon,
@@ -71,6 +73,8 @@ const itemVariants = {
 };
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuthStore();
+
   return (
     <div className="min-h-screen bg-black-midnight overflow-hidden">
       {/* ── Navigation ───────────────────────────────────────── */}
@@ -94,15 +98,23 @@ export default function LandingPage() {
             transition={{ duration: 0.5 }}
             className="flex items-center gap-2.5 sm:gap-4 shrink-0"
           >
-            <Link
-              href="/auth/login"
-              className="text-text-secondary hover:text-white transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
-            >
-              Sign In
-            </Link>
-            <Link href="/auth/register" className="btn-primary text-xs sm:text-sm py-2 px-3.5 sm:py-2.5 sm:px-5 whitespace-nowrap shrink-0">
-              Get Started
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/home" className="btn-primary text-xs sm:text-sm py-2 px-3.5 sm:py-2.5 sm:px-5 whitespace-nowrap shrink-0">
+                Go to Dashboard 🎬
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/auth/login"
+                  className="text-text-secondary hover:text-white transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
+                >
+                  Sign In
+                </Link>
+                <Link href="/auth/register" className="btn-primary text-xs sm:text-sm py-2 px-3.5 sm:py-2.5 sm:px-5 whitespace-nowrap shrink-0">
+                  Get Started
+                </Link>
+              </>
+            )}
           </motion.div>
         </div>
       </nav>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -12,11 +12,35 @@ import TwoFactorModal from '@/components/auth/TwoFactorModal';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading } = useAuthStore();
+  const { isAuthenticated, isInitializing, initializeAuth, login, isLoading } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    } else {
+      const unsub = useAuthStore.persist.onFinishHydration(() => {
+        setIsHydrated(true);
+      });
+      return () => unsub();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    initializeAuth();
+  }, [isHydrated, initializeAuth]);
+
+  useEffect(() => {
+    if (!isHydrated || isInitializing) return;
+    if (isAuthenticated) {
+      router.replace('/home');
+    }
+  }, [isHydrated, isInitializing, isAuthenticated, router]);
 
   // Field Error States
   const [emailError, setEmailError] = useState('');
