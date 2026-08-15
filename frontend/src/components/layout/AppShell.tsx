@@ -8,7 +8,7 @@ import Sidebar from './Sidebar';
 import { useSocket } from '@/hooks/useSocket';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, fetchMe } = useAuthStore();
+  const { isAuthenticated, isInitializing, initializeAuth } = useAuthStore();
   const [isHydrated, setIsHydrated] = useState(false);
   const router = useRouter();
   const { isConnected } = useSocket();
@@ -26,26 +26,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isHydrated) return;
+    initializeAuth();
+  }, [isHydrated, initializeAuth]);
 
-    let isMounted = true;
+  useEffect(() => {
+    if (!isHydrated || isInitializing) return;
     if (!isAuthenticated) {
-      fetchMe().catch(() => {
-        if (isMounted) {
-          router.replace('/auth/login');
-        }
-      });
+      router.replace('/auth/login');
     }
-    return () => {
-      isMounted = false;
-    };
-  }, [isHydrated, isAuthenticated, fetchMe, router]);
+  }, [isHydrated, isInitializing, isAuthenticated, router]);
 
-  if (!isHydrated || !isAuthenticated) {
+  if (!isHydrated || isInitializing) {
     return (
       <div className="min-h-screen bg-black-midnight flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-blue-electric/30 border-t-blue-electric rounded-full animate-spin" />
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (

@@ -26,6 +26,7 @@ interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
+  isInitializing: boolean;
   isAuthenticated: boolean;
 
   login: (
@@ -46,6 +47,7 @@ interface AuthState {
   verify2FA: (tempToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
+  initializeAuth: () => Promise<void>;
   setUser: (user: AuthUser) => void;
   setToken: (token: string) => void;
   clearAuth: () => void;
@@ -57,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       isLoading: false,
+      isInitializing: true,
       isAuthenticated: false,
 
       login: async (email, password, captchaToken, captchaInput, rememberMe) => {
@@ -102,7 +105,7 @@ export const useAuthStore = create<AuthState>()(
           const res = await authApi.verify2FA({ tempToken, code });
           const { user, accessToken } = res.data as { user: AuthUser; accessToken: string };
           localStorage.setItem('access_token', accessToken);
-          set({ user, accessToken, isAuthenticated: true, isLoading: false });
+          set({ user, accessToken, isAuthenticated: true, isLoading: false, isInitializing: false });
         } catch (error) {
           set({ isLoading: false });
           throw error;
@@ -114,43 +117,44 @@ export const useAuthStore = create<AuthState>()(
           await authApi.logout();
         } catch {}
         localStorage.removeItem('access_token');
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        set({ user: null, accessToken: null, isAuthenticated: false, isInitializing: false });
       },
 
-      fetchMe: async () => {
+      initializeAuth: async () => {
+        set({ isInitializing: true });
         let currentToken =
           get().accessToken ||
           (typeof window !== 'undefined' ? localStorage.getItem('access_token') : null);
 
-        if (!currentToken) {
+        if (currentToken) {
           try {
-            const refreshRes = await authApi.refresh();
-            const newToken = refreshRes.data.accessToken;
-            get().setToken(newToken);
-            currentToken = newToken;
-          } catch {
-            get().clearAuth();
+            const res = await authApi.me();
+            set({ user: res.data as AuthUser, isAuthenticated: true, isInitializing: false });
             return;
+          } catch (meErr: unknown) {
+            const status = (meErr as { response?: { status?: number } })?.response?.status;
+            if (status !== 401) {
+              set({ isInitializing: false });
+              return;
+            }
           }
         }
 
         try {
-          const res = await authApi.me();
-          set({ user: res.data as AuthUser, isAuthenticated: true });
-        } catch (meErr: unknown) {
-          const status = (meErr as { response?: { status?: number } })?.response?.status;
-          if (status === 401) {
-            try {
-              const refreshRes = await authApi.refresh();
-              const newToken = refreshRes.data.accessToken;
-              get().setToken(newToken);
-              const retryRes = await authApi.me();
-              set({ user: retryRes.data as AuthUser, isAuthenticated: true });
-            } catch {
-              get().clearAuth();
-            }
-          }
+          const refreshRes = await authApi.refresh();
+          const newToken = refreshRes.data.accessToken;
+          get().setToken(newToken);
+
+          const meRes = await authApi.me();
+          set({ user: meRes.data as AuthUser, isAuthenticated: true, isInitializing: false });
+        } catch {
+          get().clearAuth();
+          set({ isInitializing: false });
         }
+      },
+
+      fetchMe: async () => {
+        await get().initializeAuth();
       },
 
       setUser: (user) => set({ user }),
@@ -160,7 +164,7 @@ export const useAuthStore = create<AuthState>()(
       },
       clearAuth: () => {
         localStorage.removeItem('access_token');
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        set({ user: null, accessToken: null, isAuthenticated: false, isInitializing: false });
       },
     }),
     {
