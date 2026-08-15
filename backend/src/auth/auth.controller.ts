@@ -93,8 +93,8 @@ export class AuthController {
       httpOnly: true,
       secure: useSecureCookie,
       sameSite: useSecureCookie ? 'none' : 'lax',
+      path: '/',
     });
-    res.clearCookie('refresh_token');
     return { message: 'Logged out successfully' };
   }
 
@@ -172,7 +172,8 @@ export class AuthController {
       httpOnly: true,
       secure: useSecureCookie,
       sameSite: useSecureCookie ? 'none' : 'lax',
-      ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
+      path: '/',
+      ...(rememberMe ? { maxAge: 365 * 24 * 60 * 60 * 1000 } : {}),
     });
   }
 }

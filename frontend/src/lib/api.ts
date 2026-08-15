@@ -33,6 +33,9 @@ let refreshSubscribers: Array<{
 type TokenRefreshListener = (newToken: string) => void;
 const refreshListeners: TokenRefreshListener[] = [];
 
+type TokenRefreshFailedListener = () => void;
+const refreshFailedListeners: TokenRefreshFailedListener[] = [];
+
 export function onAccessTokenRefreshed(listener: TokenRefreshListener) {
   refreshListeners.push(listener);
   return () => {
@@ -41,10 +44,26 @@ export function onAccessTokenRefreshed(listener: TokenRefreshListener) {
   };
 }
 
+export function onTokenRefreshFailedEvent(listener: TokenRefreshFailedListener) {
+  refreshFailedListeners.push(listener);
+  return () => {
+    const idx = refreshFailedListeners.indexOf(listener);
+    if (idx !== -1) refreshFailedListeners.splice(idx, 1);
+  };
+}
+
 function notifyTokenRefreshed(newToken: string) {
   refreshListeners.forEach((fn) => {
     try {
       fn(newToken);
+    } catch {}
+  });
+}
+
+function notifyTokenRefreshFailed() {
+  refreshFailedListeners.forEach((fn) => {
+    try {
+      fn();
     } catch {}
   });
 }
@@ -113,6 +132,7 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         isRefreshing = false;
         onTokenRefreshFailed(refreshErr);
+        notifyTokenRefreshFailed();
         localStorage.removeItem('access_token');
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/')) {
           window.location.href = '/auth/login';

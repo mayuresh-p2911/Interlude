@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { authApi, onAccessTokenRefreshed } from '@/lib/api';
+import { authApi, onAccessTokenRefreshed, onTokenRefreshFailedEvent } from '@/lib/api';
 
 interface AuthUser {
   _id: string;
@@ -118,11 +118,38 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchMe: async () => {
+        let currentToken =
+          get().accessToken ||
+          (typeof window !== 'undefined' ? localStorage.getItem('access_token') : null);
+
+        if (!currentToken) {
+          try {
+            const refreshRes = await authApi.refresh();
+            const newToken = refreshRes.data.accessToken;
+            get().setToken(newToken);
+            currentToken = newToken;
+          } catch {
+            get().clearAuth();
+            return;
+          }
+        }
+
         try {
           const res = await authApi.me();
           set({ user: res.data as AuthUser, isAuthenticated: true });
-        } catch {
-          get().clearAuth();
+        } catch (meErr: unknown) {
+          const status = (meErr as { response?: { status?: number } })?.response?.status;
+          if (status === 401) {
+            try {
+              const refreshRes = await authApi.refresh();
+              const newToken = refreshRes.data.accessToken;
+              get().setToken(newToken);
+              const retryRes = await authApi.me();
+              set({ user: retryRes.data as AuthUser, isAuthenticated: true });
+            } catch {
+              get().clearAuth();
+            }
+          }
         }
       },
 
@@ -150,5 +177,8 @@ export const useAuthStore = create<AuthState>()(
 if (typeof window !== 'undefined') {
   onAccessTokenRefreshed((newToken) => {
     useAuthStore.getState().setToken(newToken);
+  });
+  onTokenRefreshFailedEvent(() => {
+    useAuthStore.getState().clearAuth();
   });
 }
