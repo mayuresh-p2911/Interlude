@@ -533,10 +533,19 @@ export class AuthService {
 
   // ── Refresh Tokens ────────────────────────────────────────────
   async refreshTokens(userId: string, refreshToken: string, rememberMe = false) {
+    this.logger.log(
+      `[AUTH_REFRESH] cookiePresent: ${!!refreshToken} jwtPayloadUserId: ${userId} rememberMe: ${rememberMe}`,
+    );
+
     const user = await this.userModel
       .findById(userId)
       .select('+refreshToken +previousRefreshToken +previousRefreshTokenExpiresAt');
+
+    const dbTokenPresent = !!user?.refreshToken || !!user?.previousRefreshToken;
+    this.logger.log(`[AUTH_REFRESH] databaseRefreshTokenPresent: ${dbTokenPresent}`);
+
     if (!user?.refreshToken && !user?.previousRefreshToken) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (no token in DB)');
       throw new UnauthorizedException('Access denied');
     }
 
@@ -560,7 +569,10 @@ export class AuthService {
       }
     }
 
+    this.logger.log(`[AUTH_REFRESH] refreshTokenHashMatches: ${tokenMatch}`);
+
     if (!tokenMatch) {
+      this.logger.log('[AUTH_REFRESH] refreshSuccessful: false (hash mismatch)');
       throw new UnauthorizedException('Access denied — invalid refresh token');
     }
 
@@ -572,6 +584,7 @@ export class AuthService {
       previousRefreshTokenExpiresAt: new Date(Date.now() + 60 * 1000), // 60-second grace period for parallel requests
       refreshToken: newHashedToken,
     });
+    this.logger.log('[AUTH_REFRESH] refreshSuccessful: true');
     return tokens;
   }
 
@@ -662,13 +675,18 @@ export class AuthService {
       rememberMe: !!rememberMe,
     };
 
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ??
+      this.configService.get<string>('JWT_SECRET') ??
+      'default_secret';
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
         expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        secret: refreshSecret,
         expiresIn: rememberMe
           ? '365d'
           : (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '1d'),

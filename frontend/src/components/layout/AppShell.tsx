@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Navbar from './Navbar';
@@ -9,10 +9,24 @@ import { useSocket } from '@/hooks/useSocket';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, fetchMe } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
   const router = useRouter();
   const { isConnected } = useSocket();
 
   useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    } else {
+      const unsub = useAuthStore.persist.onFinishHydration(() => {
+        setIsHydrated(true);
+      });
+      return () => unsub();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
     let isMounted = true;
     if (!isAuthenticated) {
       fetchMe().catch(() => {
@@ -24,9 +38,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated, fetchMe, router]);
+  }, [isHydrated, isAuthenticated, fetchMe, router]);
 
-  if (!isAuthenticated) {
+  if (!isHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-black-midnight flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-blue-electric/30 border-t-blue-electric rounded-full animate-spin" />

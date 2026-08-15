@@ -8,6 +8,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -32,6 +33,8 @@ interface RequestWithUser extends Request {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Public()
@@ -167,11 +170,16 @@ export class AuthController {
     const isProd = process.env.NODE_ENV === 'production' || origin.includes('vercel.app');
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || origin.startsWith('https://');
     const useSecureCookie = isProd || isHttps;
+    const sameSiteOption = useSecureCookie ? 'none' : 'lax';
+
+    this.logger.log(
+      `[AUTH_COOKIE] rememberMe: ${rememberMe} persistent: ${rememberMe} secure: ${useSecureCookie} sameSite: ${sameSiteOption}`,
+    );
 
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: useSecureCookie,
-      sameSite: useSecureCookie ? 'none' : 'lax',
+      sameSite: sameSiteOption,
       path: '/',
       ...(rememberMe ? { maxAge: 365 * 24 * 60 * 60 * 1000 } : {}),
     });

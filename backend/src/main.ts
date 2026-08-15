@@ -26,21 +26,24 @@ async function bootstrap() {
     }),
   );
 
+  app.set('trust proxy', 1);
+
   const configuredOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, ''))
     : [];
 
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
 
+      const cleanOrigin = origin.replace(/\/+$/, '');
       const isDev = process.env.NODE_ENV !== 'production';
-      const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+      const isLocalhost = cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1');
 
       if (
-        configuredOrigins.includes(origin) ||
+        configuredOrigins.includes(cleanOrigin) ||
         configuredOrigins.includes('*') ||
-        origin.endsWith('.vercel.app') ||
+        cleanOrigin.endsWith('.vercel.app') ||
         (isDev && isLocalhost)
       ) {
         return callback(null, true);
